@@ -5,6 +5,9 @@ import { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc, writeBa
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
+// Прямой локальный импорт движка Excel без CORS блокировок
+import * as XLSX from "./xlsx.full.mjs";
+
 export let currentUserProfile = null;
 const ui = {
     authScreen: document.getElementById('authScreen'), mainScreen: document.getElementById('mainScreen'),
@@ -13,7 +16,7 @@ const ui = {
     settingsPanel: document.getElementById('settingsPanel'), leaderPanel: document.getElementById('leaderPanel'),
     userManagementRows: document.getElementById('userManagementRows'), usersModal: document.getElementById('usersModal'),
     openUsersModalBtn: document.getElementById('openUsersModalBtn'), closeUsersModalBtn: document.getElementById('closeUsersModalBtn'),
-    spreadsheetUrlInput: document.getElementById('spreadsheetUrlInput')
+    excelFileInput: document.getElementById('excelFileInput')
 };
 
 export async function getUserTeamsMap() {
@@ -23,14 +26,10 @@ export async function getUserTeamsMap() {
 onAuthStateChanged(auth, async (u) => {
     if (u) {
         let d = await getDoc(doc(db, "users", u.uid));
-        if (!d.exists()) { alert("Ваш профиль отсутствует в базе данных."); await signOut(auth); return; }
+        if (!d.exists()) { alert("Профиль отсутствует."); await signOut(auth); return; }
         currentUserProfile = d.data(); currentUserProfile.uid = u.uid;
         ui.userDisplayName.innerText = currentUserProfile.name; ui.userRoleBadge.innerText = currentUserProfile.role === 'leader' ? 'Руководитель' : 'Сотрудник';
         ui.authScreen.classList.add('hidden'); ui.mainScreen.classList.remove('hidden');
-        
-        const cfgDoc = await getDoc(doc(db, "system", "config"));
-        if (cfgDoc.exists() && ui.spreadsheetUrlInput) ui.spreadsheetUrlInput.value = cfgDoc.data().currentCsvUrl || "";
-
         startDashboard(currentUserProfile);
         if (currentUserProfile.role === 'leader') { ui.openUsersModalBtn.classList.remove('hidden'); loadUserManagementList(); }
     } else { ui.mainScreen.classList.add('hidden'); ui.authScreen.classList.remove('hidden'); ui.openUsersModalBtn.classList.add('hidden'); }
@@ -40,76 +39,38 @@ ui.openUsersModalBtn.addEventListener('click', () => { ui.usersModal.classList.r
 ui.closeUsersModalBtn.addEventListener('click', () => ui.usersModal.classList.add('hidden'));
 
 document.getElementById('loginBtn').addEventListener('click', async () => {
-    try { await signInWithEmailAndPassword(auth, document.getElementById('loginEmail').value, document.getElementById('loginPassword').value); } catch(e){ ui.authError.innerText="Ошибка авторизации."; }
+    try { await signInWithEmailAndPassword(auth, document.getElementById('loginEmail').value, document.getElementById('loginPassword').value); } catch(e){ ui.authError.innerText="Ошибка."; }
 });
 document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth));
 document.getElementById('toggleSettingsBtn').addEventListener('click', () => { ui.settingsPanel.classList.toggle('hidden'); });
 document.getElementById('syncTableBtn').addEventListener('click', async () => {
     const targetWeek = document.getElementById('syncWeekSelect').value;
-    const rawUrl = ui.spreadsheetUrlInput.value.trim();
-    if (!rawUrl) { alert("Вставьте ссылку на главную таблицу ОУК!"); return; }
-
-    const mainMatches = rawUrl.match(/\/d\/([a-zA-DR0-9-_]+)/);
-    if (!mainMatches) { alert("Неверный формат ссылки!"); return; }
-    
-    const baseProxy = "https://google.com";
-    const mainCsvUrl = `${baseProxy}${mainMatches[1]}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent('Общее')}`;
+    const fileFile = document.getElementById('excelFileInput')?.files[0];
+    if (!fileFile) { alert("Выберите скачанный файл Excel (.xlsx)!"); return; }
 
     ui.modalAdminMessage.style.color = "var(--primary)";
-    ui.modalAdminMessage.innerText = `Подключение к листу "Общее" и извлечение карты ссылок...`;
+    ui.modalAdminMessage.innerText = `Парсинг вкладок Excel по логике Телеграм-Бота за ${targetWeek} неделю...`;
 
-    try {
-        await setDoc(doc(db, "system", "config"), { currentCsvUrl: rawUrl }, { merge: true });
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const dataBytes = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(dataBytes, { type: 'array' });
+            
+            const snap = await getDocs(collection(db, "users"));
+            const employees = [];
+            snap.forEach(d => { if(d.data().role === 'employee') employees.push({ id: d.id, name: d.data().name }); });
 
-        // 1. Считываем служебный JSON листа "Общее" для обхода CORS
-        const mainRes = await fetch(mainCsvUrl);
-        let mainText = await mainRes.text();
-        mainText = mainText.replace(/^[^{]*{/, '{').replace(/}[^}]*$/, '}');
-        const mainJson = JSON.parse(mainText);
-        
-        const personalLinksMap = {};
+            let successCount = 0;
 
-        // Сканируем строки по структуре ОУК ботов (колонки АО, ТехПо, Чатеры)
-        mainJson.table.rows.forEach(row => {
-            if (!row || !row.c) return;
-            row.c.forEach((cell, idx) => {
-                if (cell && cell.v && cell.v.toString().includes('http')) {
-                    // Имя сотрудника всегда находится на две колонки левее ссылки
-                    const nameCell = row.c[idx - 2];
-                    if (nameCell && nameCell.v) {
-                        personalLinksMap[nameCell.v.toString().toLowerCase().trim()] = cell.v.toString().trim();
-                    }
-                }
-            });
-        });
+            for (const emp of employees) {
+                // Ищем лист сотрудника (Имя вкладки в Excel == ФИО сотрудника) как в твоем боте
+                const sheetName = workbook.SheetNames.find(s => s.trim().toLowerCase() === emp.name.toLowerCase().trim());
+                if (!sheetName) continue;
 
-        // 2. Получаем специалистов из Firebase
-        const snap = await getDocs(collection(db, "users"));
-        const employees = [];
-        snap.forEach(d => { if(d.data().role === 'employee') employees.push({ id: d.id, name: d.data().name }); });
-
-        let successCount = 0;
-
-        // 3. Сканируем личные вкладки сотрудников по логике твоего Node.js скрипта
-        for (const emp of employees) {
-            try {
-                const empUrl = personalLinksMap[emp.name.toLowerCase().trim()];
-                if (!empUrl) continue;
-
-                const empMatches = empUrl.match(/\/d\/([a-zA-DR0-9-_]+)/);
-                if (!empMatches) continue;
-
-                // Запрашиваем JSON-поток конкретного листа сотрудника
-                const empCsvUrl = `${baseProxy}${empMatches[1]}/gviz/tq?tqx=out:json`;
-                const response = await fetch(empCsvUrl);
-                if (!response.ok) continue;
-
-                let empText = await response.text();
-                empText = empText.replace(/^[^{]*{/, '{').replace(/}[^}]*$/, '}');
-                const empJson = JSON.parse(empText);
-
-                const lines = empJson.table.rows.map(r => r.c ? r.c.map(c => c ? (c.f || c.v || '') : '') : []);
-
+                const worksheet = workbook.Sheets[sheetName];
+                const lines = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+                
                 let weekOukVal = null; let weekSaVal = null;
                 let finalOukRows = ['-', '-', '-', '-', '-']; const criteriaRows = [];
 
@@ -117,29 +78,32 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
                     if (!rowCells || rowCells.length === 0) return;
                     const firstCellText = rowCells[0] ? rowCells[0].toString().toLowerCase().trim() : '';
 
-                    // Парсим строки 3-13 (индексы 2-12) — критерии качества из твоего бота
+                    // Логика твоего бота: строки 3-13 (индексы 2-12) — критерии качества
                     if (index >= 2 && index <= 12) {
                         const callValues = [];
                         for (let col = 2; col <= 6; col++) {
                             callValues.push(rowCells[col] !== undefined && rowCells[col] !== '' ? rowCells[col].toString().trim() : '-');
                         }
-                        criteriaRows.push({ name: rowCells[0] || `Критерий`, calls: callValues });
+                        criteriaRows.push({ name: rowCells[0] || `Критерий качества`, calls: callValues });
                     }
-                    // Результат ОУК звонков оператора (строка 16 -> индекс 15)
+
+                    // Логика твоего бота: строка 16 (индекс 15) — итоговый ОУК звонков оператора
                     if (index === 15 || firstCellText.includes('итоговый оук') || firstCellText.includes('результат')) {
                         const oukCalls = [];
-                        for (let col = 2; col <= 6; col++) { oukCalls.push(rowCells[col] !== undefined && rowCells[col] !== '' ? rowCells[col].toString().trim() : '-'); }
+                        for (let col = 2; col <= 6; col++) {
+                            oukCalls.push(rowCells[col] !== undefined && rowCells[col] !== '' ? rowCells[col].toString().trim() : '-');
+                        }
                         finalOukRows = oukCalls;
-                        weekOukVal = parseNumLocal(rowCells[7]); // Общий итог из колонки H
+                        weekOukVal = parseNumLocal(rowCells[7]); // Общий итог недели из колонки H (индекс 7)
                     }
-                    // Оценка SA (строка 28 -> индекс 27)
-                    if (index === 27 || firstCellText.includes('sa') || firstCellText.includes('оценка sa')) {
-                        weekSaVal = parseNumLocal(rowCells[2]); // Ячейка C28
+
+                    // Логика твоего бота: ячейка C28 (строка 28 -> индекс 27, колонка C -> индекс 2) — Оценка SA
+                    if (index === 27 || firstCellText.includes('оценка sa') || firstCellText.includes('sa')) {
+                        weekSaVal = parseNumLocal(rowCells[2]); 
                     }
                 });
 
                 const weekPackage = { oukValue: weekOukVal, saValue: weekSaVal, criteria: criteriaRows, finalOukRows: finalOukRows };
-
                 const userRef = doc(db, "users", emp.id);
                 const updateFields = {};
                 updateFields[`ouk_w${targetWeek}`] = weekOukVal;
@@ -148,13 +112,16 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
 
                 await updateDoc(userRef, updateFields);
                 successCount++;
-            } catch (err) { console.warn(`Ошибка парсинга листа для ${emp.name}:`, err); }
-        }
+            }
 
-        ui.modalAdminMessage.style.color = "var(--success)";
-        ui.modalAdminMessage.innerText = `Успешно! Синхронизировано персональных таблиц для ${successCount} специалистов.`;
-        startDashboard(currentUserProfile);
-    } catch (e) { ui.modalAdminMessage.style.color = "var(--danger)"; ui.modalAdminMessage.innerText = "Ошибка разбора структуры Google Docs."; console.error(e); }
+            ui.modalAdminMessage.style.color = "var(--success)";
+            ui.modalAdminMessage.innerText = `Готово! Из файла Excel импортированы детальные чек-листы для ${successCount} специалистов.`;
+            startDashboard(currentUserProfile);
+        } catch (err) {
+            ui.modalAdminMessage.style.color = "var(--danger)"; ui.modalAdminMessage.innerText = "Ошибка чтения структуры Excel."; console.error(err);
+        }
+    };
+    reader.readAsArrayBuffer(fileFile);
 });
 
 document.getElementById('clearScoresBtn').addEventListener('click', async () => {
@@ -166,7 +133,7 @@ document.getElementById('clearScoresBtn').addEventListener('click', async () => 
     } catch(e){}
 });
 
-function parseNumLocal(v) { if(!v) return null; v=v.toString().trim().replace('%','').replace(',','.'); let n=parseFloat(v); return isNaN(n)?null:n; }
+function parseNumLocal(v) { if(v === undefined || v === null || v === '') return null; v=v.toString().trim().replace('%','').replace(',','.'); let n=parseFloat(v); return isNaN(n)?null:n; }
 
 document.getElementById('registerUserBtn').addEventListener('click', async () => {
     const name = document.getElementById('regName').value.trim(); const email = document.getElementById('regEmail').value.trim().toLowerCase();
@@ -176,7 +143,7 @@ document.getElementById('registerUserBtn').addEventListener('click', async () =>
     try {
         const cred = await createUserWithEmailAndPassword(secAuth, email, "123456");
         await setDoc(doc(db, "users", cred.user.uid), { name: name, email: email, role: "employee", teamName: team, history_weeks:{} });
-        ui.modalAdminMessage.style.color = "var(--success)"; ui.modalAdminMessage.innerText = "Сотрудник добавлен!";
+        ui.modalAdminMessage.style.color = "var(--success)"; ui.modalAdminMessage.innerText = "Создан!";
         document.getElementById('regName').value=""; document.getElementById('regEmail').value=""; loadUserManagementList(); startDashboard(currentUserProfile);
     } catch(e) { ui.modalAdminMessage.innerText = "Ошибка."; } finally { await secApp.delete(); }
 });
@@ -201,4 +168,3 @@ async function loadUserManagementList() {
 window.updateUserTeam = async function(id) { try { await updateDoc(doc(db, "users", id), { teamName: document.getElementById(`team-${id}`).value.trim() }); startDashboard(currentUserProfile); } catch (e) {} };
 window.updateUserPasswordAdmin = async function(id) { const p = document.getElementById(`pass-${id}`); if (!p || p.value.length < 6) return; try { await updateDoc(doc(db, "users", id), { forceNewPassword: p.value }); alert("Успешно"); p.value = ""; } catch (e) {} };
 window.deleteUserAdmin = async function(id) { if (!confirm("Удалить?")) return; try { await deleteDoc(doc(db, "users", id)); loadUserManagementList(); startDashboard(currentUserProfile); } catch (e) {} };
-
