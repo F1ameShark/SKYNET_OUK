@@ -64,7 +64,6 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
             let successCount = 0;
 
             for (const emp of employees) {
-                // Ищем в Excel вкладку, имя которой совпадает с ФИО сотрудника
                 const sheetName = workbook.SheetNames.find(s => s.trim().toLowerCase() === emp.name.toLowerCase().trim());
                 if (!sheetName) continue;
 
@@ -78,7 +77,6 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
                     if (!rowCells || rowCells.length === 0) return;
                     const firstCellText = rowCells ? rowCells.toString().toLowerCase().trim() : '';
 
-                    // Логика твоего бота: строки 3-13 (индексы 2-12) — критерии качества звонка
                     if (index >= 2 && index <= 12) {
                         const callValues = [];
                         for (let col = 2; col <= 6; col++) {
@@ -87,17 +85,15 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
                         criteriaRows.push({ name: rowCells || `Критерий качества`, calls: callValues });
                     }
 
-                    // Логика твоего бота: строка 16 (индекс 15) — итоговый ОУК звонков оператора
                     if (index === 15 || firstCellText.includes('итоговый оук') || firstCellText.includes('результат')) {
                         const oukCalls = [];
                         for (let col = 2; col <= 6; col++) {
                             oukCalls.push(rowCells[col] !== undefined && rowCells[col] !== '' ? rowCells[col].toString().trim() : '-');
                         }
                         finalOukRows = oukCalls;
-                        weekOukVal = parseNumLocal(rowCells); // Общий итог недели из колонки H (индекс 7)
+                        weekOukVal = parseNumLocal(rowCells); 
                     }
 
-                    // Логика твоего бота: строка 28 (индекс 27) — Оценка SA (ячейка C28 -> индекс 2)
                     if (index === 27 || firstCellText.includes('оценка sa') || firstCellText.includes('sa')) {
                         weekSaVal = parseNumLocal(rowCells); 
                     }
@@ -121,7 +117,8 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
             ui.modalAdminMessage.style.color = "var(--danger)"; ui.modalAdminMessage.innerText = "Ошибка чтения структуры Excel."; console.error(err);
         }
     };
-    reader.readAsArrayBuffer(files);
+    // ИСПРАВЛЕНО: передаем конкретный первый файл, а не массив файлов
+    reader.readAsArrayBuffer(files[0]);
 });
 
 document.getElementById('clearScoresBtn').addEventListener('click', async () => {
@@ -162,7 +159,7 @@ async function loadUserManagementList() {
                 <button class="btn btn-sm btn-danger" onclick="window.deleteUserAdmin('${uId}')">Удалить</button></td>`;
             ui.userManagementRows.appendChild(tr);
         });
-    } catch (e) { console.error(e); }
+    } catch (e) {}
 }
 
 window.updateUserTeam = async function(id) { try { await updateDoc(doc(db, "users", id), { teamName: document.getElementById(`team-${id}`).value.trim() }); startDashboard(currentUserProfile); } catch (e) {} };
