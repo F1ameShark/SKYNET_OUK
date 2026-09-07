@@ -5,9 +5,8 @@ import { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc, writeBa
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
-// Динамически забираем готовый объект библиотеки из окна браузера при каждом обращении
-const XLSX = window.XLSX || globalThis.XLSX;
-
+// Импортируем собственный локальный автономный парсер Excel
+import * as XLSX from "./xlsx.full.mjs";
 
 export let currentUserProfile = null;
 const ui = {
@@ -27,7 +26,7 @@ export async function getUserTeamsMap() {
 onAuthStateChanged(auth, async (u) => {
     if (u) {
         let d = await getDoc(doc(db, "users", u.uid));
-        if (!d.exists()) { alert("Ваш профиль отсутствует в базе данных. Обратитесь к руководителю."); await signOut(auth); return; }
+        if (!d.exists()) { alert("Профиль отсутствует в базе."); await signOut(auth); return; }
         currentUserProfile = d.data(); currentUserProfile.uid = u.uid;
         ui.userDisplayName.innerText = currentUserProfile.name; ui.userRoleBadge.innerText = currentUserProfile.role === 'leader' ? 'Руководитель' : 'Сотрудник';
         ui.authScreen.classList.add('hidden'); ui.mainScreen.classList.remove('hidden');
@@ -40,7 +39,7 @@ ui.openUsersModalBtn.addEventListener('click', () => { ui.usersModal.classList.r
 ui.closeUsersModalBtn.addEventListener('click', () => ui.usersModal.classList.add('hidden'));
 
 document.getElementById('loginBtn').addEventListener('click', async () => {
-    try { await signInWithEmailAndPassword(auth, document.getElementById('loginEmail').value, document.getElementById('loginPassword').value); } catch(e){ ui.authError.innerText="Неверный логин или пароль."; }
+    try { await signInWithEmailAndPassword(auth, document.getElementById('loginEmail').value, document.getElementById('loginPassword').value); } catch(e){ ui.authError.innerText="Ошибка."; }
 });
 document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth));
 document.getElementById('toggleSettingsBtn').addEventListener('click', () => { ui.settingsPanel.classList.toggle('hidden'); });
@@ -51,19 +50,14 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
     if (!filesList || filesList.length === 0) { alert("Выберите скачанный файл Excel (.xlsx) для импорта!"); return; }
 
     ui.modalAdminMessage.style.color = "var(--primary)";
-    ui.modalAdminMessage.innerText = `Парсинг вкладок Excel по логике Телеграм-Бота за ${targetWeek} неделю...`;
+    ui.modalAdminMessage.innerText = `Локальный анализ структуры Excel и импорт за ${targetWeek} неделю...`;
 
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
-            const currentXLSX = window.XLSX || globalThis.XLSX;
-            if (!currentXLSX) {
-                alert("Критическая ошибка: Движок Excel еще не инициализирован браузером. Обновите страницу через Ctrl+F5.");
-                return;
-            }
-
             const dataBytes = new Uint8Array(e.target.result);
-            const workbook = currentXLSX.read(dataBytes, { type: 'array' });
+            // Используем локальный импортированный XLSX модуль
+            const workbook = XLSX.read(dataBytes, { type: 'array' });
             
             const snap = await getDocs(collection(db, "users"));
             const employees = [];
@@ -76,7 +70,7 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
                 if (!sheetName) continue;
 
                 const worksheet = workbook.Sheets[sheetName];
-                const lines = currentXLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+                const lines = workbook.utils.sheet_to_json(worksheet);
                 
                 let weekOukVal = null; let weekSaVal = null;
                 let finalOukRows = ['-', '-', '-', '-', '-']; const criteriaRows = [];
@@ -126,7 +120,6 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
         }
     };
     
-    // ЖЕСТКИЙ ФИКС БЕЗ ИСПОЛЬЗОВАНИЯ СКОБОК КВАДРАТОВ (Чат больше не вырежет этот метод)
     const targetBlobFile = filesList.item(0);
     reader.readAsArrayBuffer(targetBlobFile);
 });
