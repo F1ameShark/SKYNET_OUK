@@ -6,6 +6,7 @@
 <title>Мониторинг ОУК и SA</title>
 <link rel="icon" type="image/png" sizes="192x192" href="web-app-manifest-192x192.png">
 <link rel="manifest" href="manifest.json">
+<script src="https://cloudflare.com"></script>
 <link rel="stylesheet" href="style.css">
 <style>
 .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;padding:10px;}
@@ -81,11 +82,11 @@ if(savedTheme==='dark')document.documentElement.setAttribute('data-theme','dark'
 <div id="usersModal" class="modal-overlay hidden">
 <div class="modal-content">
 <button class="modal-close" id="closeUsersModalBtn">&times;</button>
-<h3 style="margin-bottom:15px;">Управление пользователями и загрузка отчетов</h3>
+<h3 style="margin-bottom:15px;">Управление пользователями и загрузка Excel</h3>
 <div style="background:var(--bg-color);padding:15px;border-radius:8px;margin-bottom:20px;display:flex;flex-direction:column;gap:12px;border:1px solid var(--border);">
 <div class="form-group" style="margin-bottom:0;width:100%;">
-<label style="font-size:0.85rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Ссылка на Google Таблицу:</label>
-<input type="text" id="spreadsheetUrlInput" placeholder="Вставьте сюда ссылку из браузера на таблицу ОУК" style="padding:10px;border:1px solid var(--border);border-radius:8px;width:100%;font-size:0.9rem;background:var(--card-bg);color:var(--text-main);">
+<label style="font-size:0.85rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Выберите скачанный файл Excel (.xlsx):</label>
+<input type="file" id="excelFileInput" accept=".xlsx, .xls" style="padding:8px;border:1px solid var(--border);border-radius:8px;width:100%;background:var(--card-bg);color:var(--text-main);">
 </div>
 <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;width:100%;">
 <select id="syncWeekSelect" class="sm-select" style="font-weight:600;height:38px;">
@@ -95,7 +96,7 @@ if(savedTheme==='dark')document.documentElement.setAttribute('data-theme','dark'
 <option value="4">4 Неделя месяца</option>
 <option value="5">5 Неделя месяца</option>
 </select>
-<button class="btn" id="syncTableBtn" style="background:#2f855a;font-size:0.85rem;padding:8px 14px;height:38px;">🔄 Загрузить данные из Google Docs</button>
+<button class="btn" id="syncTableBtn" style="background:#2f855a;font-size:0.85rem;padding:8px 14px;height:38px;">🔄 Загрузить оценки из файла</button>
 <button class="btn btn-danger" id="clearScoresBtn" style="font-size:0.85rem;padding:8px 14px;height:38px;margin-left:auto;">🗑️ Очистить месяц</button>
 </div>
 </div>
@@ -163,7 +164,7 @@ if(savedTheme==='dark')document.documentElement.setAttribute('data-theme','dark'
 </div>
 </div>
 </div>
-<script type="module" src="script.js?v=400"></script>
+<script type="module" src="script.js?v=999"></script>
 <script type="module">
 const sPanel=document.getElementById('settingsPanel'); const wModal=document.getElementById('weekDetailsModal');
 document.getElementById('closeSettingsModalBtn').addEventListener('click',()=>sPanel.classList.add('hidden'));
