@@ -45,85 +45,66 @@ document.getElementById('logoutBtn').addEventListener('click', () => signOut(aut
 document.getElementById('toggleSettingsBtn').addEventListener('click', () => { ui.settingsPanel.classList.toggle('hidden'); });
 document.getElementById('syncTableBtn').addEventListener('click', async () => {
     const targetWeek = document.getElementById('syncWeekSelect').value;
-    const fileInputElement = document.getElementById('excelFileInput');
-    const filesList = fileInputElement ? fileInputElement.files : null;
-    if (!filesList || filesList.length === 0) { alert("Выберите скачанный файл Excel (.xlsx) для импорта!"); return; }
-
+    const filesList = document.getElementById('excelFileInput')?.files;
+    if (!filesList || filesList.length === 0) { alert("Выберите файл Excel (.xlsx)!"); return; }
     ui.modalAdminMessage.style.color = "var(--primary)";
-    ui.modalAdminMessage.innerText = `Локальный анализ структуры Excel и импорт за ${targetWeek} неделю...`;
-
+    ui.modalAdminMessage.innerText = `Парсинг структуры Excel за ${targetWeek} неделю...`;
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
+            const currentXLSX = window.XLSX || globalThis.XLSX;
+            if (!currentXLSX) { alert("Ошибка: библиотека Excel не готова."); return; }
             const dataBytes = new Uint8Array(e.target.result);
-            // Используем локальный импортированный XLSX модуль
-            const workbook = XLSX.read(dataBytes, { type: 'array' });
-            
+            const workbook = currentXLSX.read(dataBytes, { type: 'array' });
+            const worksheet = workbook.Sheets[workbook.SheetNames.item(0)];
+            const lines = currentXLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
             const snap = await getDocs(collection(db, "users"));
             const employees = [];
             snap.forEach(d => { if(d.data().role === 'employee') employees.push({ id: d.id, name: d.data().name }); });
-
             let successCount = 0;
-
-            for (const emp of employees) {
-                const sheetName = workbook.SheetNames.find(s => s.trim().toLowerCase() === emp.name.toLowerCase().trim());
-                if (!sheetName) continue;
-
-                const worksheet = workbook.Sheets[sheetName];
-                const lines = workbook.utils.sheet_to_json(worksheet);
-                
-                let weekOukVal = null; let weekSaVal = null;
-                let finalOukRows = ['-', '-', '-', '-', '-']; const criteriaRows = [];
-
-                lines.forEach((rowCells, index) => {
-                    if (!rowCells || rowCells.length === 0) return;
-                    const firstCellText = rowCells ? rowCells.toString().toLowerCase().trim() : '';
-
-                    if (index >= 2 && index <= 12) {
-                        const callValues = [];
-                        for (let col = 2; col <= 6; col++) {
-                            callValues.push(rowCells[col] !== undefined && rowCells[col] !== '' ? rowCells[col].toString().trim() : '-');
+            for (let i = 0; i < lines.length; i++) {
+                const currentRowText = lines.item(i) ? lines.item(i).join(' ').toLowerCase() : '';
+                if (currentRowText.includes('skyservice') && currentRowText.includes('ос по разговорам')) {
+                    const metaRow = lines.item(i - 1);
+                    const metaText = metaRow ? metaRow.join(' ').toLowerCase() : '';
+                    const matchedEmp = employees.find(emp => metaText.includes(emp.name.toLowerCase().trim()));
+                    if (!matchedEmp) continue;
+                    let weekOukVal = null; let weekSaVal = null;
+                    let finalOukRows = ['-', '-', '-', '-', '-']; const criteriaRows = [];
+                    for (let j = i + 1; j < Math.min(i + 50, lines.length); j++) {
+                        const subRow = lines.item(j); if (!subRow || subRow.length === 0) continue;
+                        const subRowText = subRow.join(' ').toLowerCase();
+                        const firstCellText = subRow.item(0) ? subRow.item(0).toString().toLowerCase().trim() : '';
+                        if (j >= i + 2 && j <= i + 12) {
+                            const callValues = [];
+                            for (let col = 2; col <= 6; col++) { callValues.push(subRow.item(col) !== undefined && subRow.item(col) !== '' ? subRow.item(col).toString().trim() : '-'); }
+                            criteriaRows.push({ name: subRow.item(0) || `Критерий`, calls: callValues });
                         }
-                        criteriaRows.push({ name: rowCells || `Критерий качества`, calls: callValues });
-                    }
-
-                    if (index === 15 || firstCellText.includes('итоговый оук') || firstCellText.includes('результат')) {
-                        const oukCalls = [];
-                        for (let col = 2; col <= 6; col++) {
-                            oukCalls.push(rowCells[col] !== undefined && rowCells[col] !== '' ? rowCells[col].toString().trim() : '-');
+                        if (j === i + 13 || (subRow.item(0) === '' && subRow.item(1) === '' && subRow.item(2) !== '')) {
+                            const oukCalls = [];
+                            for (let col = 2; col <= 6; col++) { oukCalls.push(subRow.item(col) !== undefined && subRow.item(col) !== '' ? subRow.item(col).toString().trim() : '-'); }
+                            finalOukRows = oukCalls;
                         }
-                        finalOukRows = oukCalls;
-                        weekOukVal = parseNumLocal(rowCells); 
+                        if (firstCellText === 'оценка оук') weekOukVal = parseNumLocal(subRow.item(1));
+                        if (firstCellText === 'оценка sa') weekSaVal = parseNumLocal(subRow.item(1));
+                        if (j > i + 5 && subRowText.includes('skyservice')) break;
                     }
-
-                    if (index === 27 || firstCellText.includes('оценка sa') || firstCellText.includes('sa')) {
-                        weekSaVal = parseNumLocal(rowCells); 
-                    }
-                });
-
-                const weekPackage = { oukValue: weekOukVal, saValue: weekSaVal, criteria: criteriaRows, finalOukRows: finalOukRows };
-                const userRef = doc(db, "users", emp.id);
-                const updateFields = {};
-                updateFields[`ouk_w${targetWeek}`] = weekOukVal;
-                updateFields[`sa_w${targetWeek}`] = weekSaVal;
-                updateFields[`history_weeks.w${targetWeek}`] = weekPackage;
-
-                await updateDoc(userRef, updateFields);
-                successCount++;
+                    const weekPackage = { oukValue: weekOukVal, saValue: weekSaVal, criteria: criteriaRows, finalOukRows: finalOukRows };
+                    const userRef = doc(db, "users", matchedEmp.id);
+                    const updateFields = {};
+                    updateFields[`ouk_w${targetWeek}`] = weekOukVal;
+                    updateFields[`sa_w${targetWeek}`] = weekSaVal;
+                    updateFields[`history_weeks.w${targetWeek}`] = weekPackage;
+                    await updateDoc(userRef, updateFields); successCount++;
+                }
             }
-
             ui.modalAdminMessage.style.color = "var(--success)";
-            ui.modalAdminMessage.innerText = `Готово! Из файла Excel импортированы детальные чек-листы для ${successCount} специалистов.`;
+            ui.modalAdminMessage.innerText = `Успешно! Импортированы детальные данные для ${successCount} специалистов.`;
             startDashboard(currentUserProfile);
-        } catch (err) {
-            ui.modalAdminMessage.style.color = "var(--danger)"; ui.modalAdminMessage.innerText = "Ошибка чтения структуры Excel."; console.error(err);
-        }
+        } catch (err) { ui.modalAdminMessage.style.color = "var(--danger)"; ui.modalAdminMessage.innerText = "Ошибка разбора Excel."; console.error(err); }
     };
-    
-    const targetBlobFile = filesList.item(0);
-    reader.readAsArrayBuffer(targetBlobFile);
+    const targetBlobFile = filesList.item(0); reader.readAsArrayBuffer(targetBlobFile);
 });
-
 document.getElementById('clearScoresBtn').addEventListener('click', async () => {
     if(!confirm("Стереть все оценки текущего месяца?")) return;
     try {
@@ -132,22 +113,18 @@ document.getElementById('clearScoresBtn').addEventListener('click', async () => 
         await batch.commit(); ui.modalAdminMessage.innerText = "Архив очищен."; startDashboard(currentUserProfile);
     } catch(e){}
 });
-
 function parseNumLocal(v) { if(v === undefined || v === null || v === '') return null; v=v.toString().trim().replace('%','').replace(',','.'); let n=parseFloat(v); return isNaN(n)?null:n; }
-
 document.getElementById('registerUserBtn').addEventListener('click', async () => {
     const name = document.getElementById('regName').value.trim(); const email = document.getElementById('regEmail').value.trim().toLowerCase();
-    const team = document.getElementById('regTeam').value.trim() || "Основная";
-    if(!name || !email) return;
+    const team = document.getElementById('regTeam').value.trim() || "Основная"; if(!name || !email) return;
     const secApp = initializeApp(app.options, "SecondaryContext"); const secAuth = getAuth(secApp);
     try {
         const cred = await createUserWithEmailAndPassword(secAuth, email, "123456");
         await setDoc(doc(db, "users", cred.user.uid), { name: name, email: email, role: "employee", teamName: team, history_weeks:{} });
-        ui.modalAdminMessage.style.color = "var(--success)"; ui.modalAdminMessage.innerText = "Сотрудник добавлен!";
+        ui.modalAdminMessage.style.color = "var(--success)"; ui.modalAdminMessage.innerText = "Добавлен!";
         document.getElementById('regName').value=""; document.getElementById('regEmail').value=""; loadUserManagementList(); startDashboard(currentUserProfile);
     } catch(e) { ui.modalAdminMessage.innerText = "Ошибка."; } finally { await secApp.delete(); }
 });
-
 async function loadUserManagementList() {
     if (!ui.userManagementRows) return;
     try {
@@ -162,9 +139,8 @@ async function loadUserManagementList() {
                 <button class="btn btn-sm btn-danger" onclick="window.deleteUserAdmin('${uId}')">Удалить</button></td>`;
             ui.userManagementRows.appendChild(tr);
         });
-    } catch (e) { console.error(e); }
+    } catch (e) {}
 }
-
 window.updateUserTeam = async function(id) { try { await updateDoc(doc(db, "users", id), { teamName: document.getElementById(`team-${id}`).value.trim() }); startDashboard(currentUserProfile); } catch (e) {} };
 window.updateUserPasswordAdmin = async function(id) { const p = document.getElementById(`pass-${id}`); if (!p || p.value.length < 6) return; try { await updateDoc(doc(db, "users", id), { forceNewPassword: p.value }); alert("Успешно"); p.value = ""; } catch (e) {} };
 window.deleteUserAdmin = async function(id) { if (!confirm("Удалить?")) return; try { await deleteDoc(doc(db, "users", id)); loadUserManagementList(); startDashboard(currentUserProfile); } catch (e) {} };
