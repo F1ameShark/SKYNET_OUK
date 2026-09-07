@@ -46,8 +46,9 @@ document.getElementById('logoutBtn').addEventListener('click', () => signOut(aut
 document.getElementById('toggleSettingsBtn').addEventListener('click', () => { ui.settingsPanel.classList.toggle('hidden'); });
 document.getElementById('syncTableBtn').addEventListener('click', async () => {
     const targetWeek = document.getElementById('syncWeekSelect').value;
-    const files = ui.excelFileInput?.files;
-    if (!files || files.length === 0) { alert("Выберите скачанный файл Excel (.xlsx) для импорта!"); return; }
+    const fileInputElement = document.getElementById('excelFileInput');
+    const filesList = fileInputElement ? fileInputElement.files : null;
+    if (!filesList || filesList.length === 0) { alert("Выберите скачанный файл Excel (.xlsx) для импорта!"); return; }
 
     ui.modalAdminMessage.style.color = "var(--primary)";
     ui.modalAdminMessage.innerText = `Парсинг вкладок Excel по логике Телеграм-Бота за ${targetWeek} неделю...`;
@@ -55,7 +56,6 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
-            // ЖЕСТКИЙ МОСТ К КЛИЕНТСКОЙ БИБЛИОТЕКЕ НАПРЯМУЮ В МОМЕНТ ЧТЕНИЯ БЛОБА
             const currentXLSX = window.XLSX || globalThis.XLSX;
             if (!currentXLSX) {
                 alert("Критическая ошибка: Движок Excel еще не инициализирован браузером. Обновите страницу через Ctrl+F5.");
@@ -125,7 +125,10 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
             ui.modalAdminMessage.style.color = "var(--danger)"; ui.modalAdminMessage.innerText = "Ошибка чтения структуры Excel."; console.error(err);
         }
     };
-    reader.readAsArrayBuffer(files[0]);
+    
+    // ЖЕСТКИЙ ФИКС БЕЗ ИСПОЛЬЗОВАНИЯ СКОБОК КВАДРАТОВ (Чат больше не вырежет этот метод)
+    const targetBlobFile = filesList.item(0);
+    reader.readAsArrayBuffer(targetBlobFile);
 });
 
 document.getElementById('clearScoresBtn').addEventListener('click', async () => {
@@ -166,7 +169,7 @@ async function loadUserManagementList() {
                 <button class="btn btn-sm btn-danger" onclick="window.deleteUserAdmin('${uId}')">Удалить</button></td>`;
             ui.userManagementRows.appendChild(tr);
         });
-    } catch (e) {}
+    } catch (e) { console.error(e); }
 }
 
 window.updateUserTeam = async function(id) { try { await updateDoc(doc(db, "users", id), { teamName: document.getElementById(`team-${id}`).value.trim() }); startDashboard(currentUserProfile); } catch (e) {} };
