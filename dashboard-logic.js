@@ -1,3 +1,5 @@
+import { db } from "./firebase-config.js";
+import { collection, getDocs } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 import { getUserTeamsMap } from "./auth-logic.js";
 
 let googleData = [];
@@ -38,7 +40,7 @@ export async function startDashboard(userProfile) {
 
 async function fetchEmployeesFromFirestore() {
     try {
-        const snap = await google.firestore().collection("users").get();
+        const snap = await getDocs(collection(db, "users"));
         googleData = [];
         snap.forEach(d => {
             const data = d.data();
