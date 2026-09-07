@@ -1,183 +1,171 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Мониторинг ОУК и SA</title>
-    <link rel="icon" type="image/png" sizes="192x192" href="web-app-manifest-192x192.png">
-    <link rel="manifest" href="manifest.json">
-    <link rel="stylesheet" href="style.css">
-    <style>
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 10px; }
-        .modal-content { background: var(--card-bg); width: 90%; max-width: 900px; max-height: 85vh; padding: 25px; border-radius: 12px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); overflow-y: auto; position: relative; }
-        .modal-close { position: absolute; top: 15px; right: 15px; background: none; border: none; font-size: 1.5rem; cursor: pointer; color: var(--text-muted); line-height: 1; }
-        .modal-close:hover { color: var(--text-main); }
-        .user-management-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.9rem; }
-        .user-management-table th, .user-management-table td { padding: 10px; border: 1px solid var(--border); text-align: left; }
-        .user-management-table th { background-color: var(--table-th-bg); color: var(--text-muted); position: sticky; top: 0; }
-        .sm-input { padding: 4px 8px; border: 1px solid var(--border); border-radius: 4px; font-size: 0.85rem; width: 130px; background: var(--input-bg); color: var(--text-main); }
-        .btn-sm { padding: 4px 8px; font-size: 0.8rem; border-radius: 4px; margin-right: 5px; }
-        .theme-switch-wrapper { display: flex; align-items: center; gap: 15px; margin-bottom: 25px; padding-bottom: 15px; border-bottom: 1px solid var(--border); }
-        .theme-switch-label { font-size: 1rem; font-weight: 600; color: var(--text-main); }
-    </style>
-    <script>
-        const savedTheme = localStorage.getItem('site-theme');
-        if (savedTheme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-    </script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Мониторинг ОУК и SA</title>
+<link rel="icon" type="image/png" sizes="192x192" href="web-app-manifest-192x192.png">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="style.css">
+<style>
+.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;padding:10px;}
+.modal-content{background:var(--card-bg);width:95%;max-width:850px;max-height:90vh;padding:25px;border-radius:12px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);overflow-y:auto;position:relative;}
+.modal-close{position:absolute;top:15px;right:15px;background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--text-muted);line-height:1;}
+.modal-close:hover{color:var(--text-main);}
+.user-management-table,.detail-calls-table{width:100%;border-collapse:collapse;margin-top:15px;font-size:0.9rem;color:var(--text-main);}
+.user-management-table th,.user-management-table td,.detail-calls-table th,.detail-calls-table td{padding:10px;border:1px solid var(--border);text-align:left;}
+.user-management-table th,.detail-calls-table th{background-color:var(--table-th-bg);color:var(--text-muted);font-weight:700;text-transform:uppercase;font-size:0.75rem;}
+.sm-input{padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:0.85rem;background:var(--input-bg);color:var(--text-main);outline:none;}
+.btn-sm{padding:6px 10px;font-size:0.8rem;border-radius:4px;margin-right:5px;}
+</style>
+<script>
+const savedTheme=localStorage.getItem('site-theme');
+if(savedTheme==='dark')document.documentElement.setAttribute('data-theme','dark');
+</script>
 </head>
 <body>
 <div class="container">
-    <div id="authScreen" class="auth-container">
-        <div class="site-logo-container" style="margin-bottom: 25px;">
-            <img src="web-app-manifest-192x192.png" alt="Logo" class="site-logo-img">
-            <div class="site-logo-text">ORDA</div>
-        </div>
-        <h2>Вход в систему</h2>
-        <div class="form-group"><label>Email</label><input type="email" id="loginEmail" placeholder="example@company.com"></div>
-        <div class="form-group"><label>Пароль</label><input type="password" id="loginPassword" placeholder="******"></div>
-        <button class="btn" id="loginBtn" style="width: 100%;">Войти</button>
-        <p id="authError" style="color: var(--danger); font-size: 0.85rem; margin-top: 10px; text-align: center;"></p>
-    </div>
-
-    <div id="mainScreen" class="hidden">
-        <div class="navbar">
-            <div class="site-logo-container">
-                <img src="web-app-manifest-192x192.png" alt="Logo" class="site-logo-img">
-                <div class="site-logo-text">ORDA <span>ПОРТАЛ</span></div>
-            </div>
-            <div class="nav-user">
-                <strong id="userDisplayName">-</strong> 
-                <span id="userRoleBadge" style="font-size:0.8rem; padding:2px 8px; background:var(--border); color:var(--text-main); border-radius:10px;">-</span>
-            </div>
-            <div class="nav-buttons">
-                <button class="btn hidden" id="openUsersModalBtn" style="background: #3182ce;">👥 Управление пользователями</button>
-                <button class="btn" id="toggleSettingsBtn" style="background: #4a5568;">⚙️ Настройки</button>
-                <button class="btn btn-danger" id="logoutBtn">Выйти</button>
-            </div>
-        </div>
-
-        <div id="settingsPanel" class="modal-overlay hidden">
-            <div class="modal-content" style="max-width: 500px;">
-                <button class="modal-close" id="closeSettingsModalBtn">&times;</button>
-                <h3 style="margin-bottom: 20px; color: var(--text-main);">⚙️ Настройки и безопасность</h3>
-                <div class="theme-switch-wrapper">
-                    <span class="theme-switch-label">Включить тёмную тему</span>
-                    <button class="btn" id="themeToggleBtn" style="padding: 8px 14px; font-size: 0.9rem; background: var(--primary);">🌙 Выкл</button>
-                </div>
-                <h4 style="margin-bottom: 10px; font-size: 0.95rem; color: var(--text-muted);">Сменить личный пароль:</h4>
-                <div class="form-group" style="margin-bottom: 12px;">
-                    <input type="password" id="newPassword" placeholder="Новый пароль (минимум 6 символов)" style="padding: 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--input-bg); color: var(--text-main);">
-                </div>
-                <button class="btn" id="changePasswordBtn" style="width: 100%; margin-bottom: 10px;">Обновить пароль</button>
-                <p id="settingsMessage" style="font-size: 0.9rem; font-weight: 600; text-align: center;"></p>
-            </div>
-        </div>
-        <div id="leaderPanel" class="admin-panel hidden">
-            <h3>Управление командой</h3>
-            <div class="inline-form">
-                <input type="text" id="newTeamName" placeholder="Новое название вашей команды">
-                <button class="btn" id="saveTeamNameBtn">Изменить название команды</button>
-            </div>
-            <p id="adminMessage" style="font-size: 0.9rem; font-weight: 600;"></p>
-        </div>
-
-        <div id="usersModal" class="modal-overlay hidden">
-            <div class="modal-content">
-                <button class="modal-close" id="closeUsersModalBtn">&times;</button>
-                <h3 style="margin-bottom: 15px;">Управление пользователями системы</h3>
-                <h4 style="margin: 15px 0 10px; font-size: 0.95rem; color: var(--text-muted);">Зарегистрировать нового сотрудника в системе:</h4>
-                <div class="inline-form">
-                    <input type="text" id="regName" placeholder="ФИО (как в Гугл Таблице)">
-                    <input type="email" id="regEmail" placeholder="Email сотрудника">
-                    <input type="text" id="regTeam" placeholder="Название команды">
-                    <button class="btn" id="registerUserBtn">Создать аккаунт</button>
-                </div>
-                <p id="modalAdminMessage" style="font-size: 0.9rem; font-weight: 600; margin-bottom: 20px;"></p>
-                <h4 style="margin-bottom: 10px; font-size: 1rem;">Список пользователей (Сотрудники)</h4>
-                <div style="overflow-x: auto;">
-                    <table class="user-management-table">
-                        <thead>
-                            <tr>
-                                <th>ФИО Специалиста</th>
-                                <th>Email</th>
-                                <th>Команда</th>
-                                <th>Новый пароль</th>
-                                <th>Действия</th>
-                            </tr>
-                        </thead>
-                        <tbody id="userManagementRows"></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div id="statsBar" class="stats-bar hidden">
-            <div class="stat-card" style="border-left-color: #3182ce;"><p>Сотрудников в подчинении</p><h3 id="statTotal">-</h3></div>
-            <div class="stat-card" style="border-left-color: var(--success);"><p>Средний ОУК команды</p><h3 id="statAvg">-</h3></div>
-            <div class="stat-card" style="border-left-color: #805ad5;"><p>Средний SA команды</p><h3 id="statSaAvg">-</h3></div>
-        </div>
-
-        <div id="controlsBar" class="controls hidden">
-            <input type="text" id="searchInput" class="search-input" placeholder="Поиск сотрудника по ФИО...">
-        </div>
-        
-        <div id="mobileSortBlock" class="mobile-sort-container">
-            <span class="sort-label">Сортировка:</span>
-            <div class="mobile-sort-buttons">
-                <button class="btn btn-sm" id="mbSortName">📝 По ФИО</button>
-                <button class="btn btn-sm" id="mbSortOuk">📊 По ОУК</button>
-                <button class="btn btn-sm" id="mbSortSa">⚡ По SA</button>
-            </div>
-        </div>
-
-        <div id="loader" class="loader">Считывание результатов из Google Таблицы...</div>
-        
-        <div id="listContainer" class="list-container hidden">
-            <table class="main-list-table">
-                <thead>
-                    <tr>
-                        <th id="sortName" class="sortable" style="width: 30%;">Специалист</th>
-                        <th style="width: 15%;">Команда</th>
-                        <th id="sortOuk" class="sortable" style="width: 27%;">Результаты ОУК (Месяц / Недели)</th>
-                        <th id="sortSa" class="sortable" style="width: 28%;">Результаты SA (Месяц / Недели)</th>
-                    </tr>
-                </thead>
-                <tbody id="mainListRows"></tbody>
-            </table>
-        </div>
-    </div>
+<div id="authScreen" class="auth-container">
+<div class="site-logo-container" style="margin-bottom:25px;">
+<img src="web-app-manifest-192x192.png" alt="Logo" class="site-logo-img">
+<div class="site-logo-text">ORDA</div>
 </div>
-
-<script type="module" src="script.js?v=20"></script>
+<h2>Вход в систему</h2>
+<div class="form-group"><label>Email</label><input type="email" id="loginEmail" placeholder="example@company.com"></div>
+<div class="form-group"><label>Пароль</label><input type="password" id="loginPassword" placeholder="******"></div>
+<button class="btn" id="loginBtn" style="width:100%;">Войти</button>
+<p id="authError" style="color:var(--danger);font-size:0.85rem;margin-top:10px;text-align:center;"></p>
+</div>
+<div id="mainScreen" class="hidden">
+<div class="navbar">
+<div class="site-logo-container">
+<img src="web-app-manifest-192x192.png" alt="Logo" class="site-logo-img">
+<div class="site-logo-text">ORDA <span>ПОРТАЛ</span></div>
+</div>
+<div class="nav-user">
+<strong id="userDisplayName">-</strong> 
+<span id="userRoleBadge" style="font-size:0.8rem;padding:2px 8px;background:var(--border);color:var(--text-main);border-radius:10px;">-</span>
+</div>
+<div class="nav-buttons">
+<button class="btn hidden" id="openUsersModalBtn" style="background:#3182ce;">👥 Управление пользователями</button>
+<button class="btn" id="toggleSettingsBtn" style="background:#4a5568;">⚙️ Настройки</button>
+<button class="btn btn-danger" id="logoutBtn">Выйти</button>
+</div>
+</div>
+<div id="settingsPanel" class="modal-overlay hidden">
+<div class="modal-content" style="max-width:500px;">
+<button class="modal-close" id="closeSettingsModalBtn">&times;</button>
+<h3 style="margin-bottom:20px;color:var(--text-main);">⚙️ Настройки и безопасность</h3>
+<div class="theme-switch-wrapper">
+<span class="theme-switch-label">Включить тёмную тему</span>
+<button class="btn" id="themeToggleBtn" style="padding:8px 14px;font-size:0.9rem;background:var(--primary);">🌙 Выкл</button>
+</div>
+<h4 style="margin-bottom:10px;font-size:0.95rem;color:var(--text-muted);">Сменить личный пароль:</h4>
+<div class="form-group" style="margin-bottom:12px;">
+<input type="password" id="newPassword" placeholder="Новый пароль (минимум 6 символов)">
+</div>
+<button class="btn" id="changePasswordBtn" style="width:100%;margin-bottom:10px;">Обновить пароль</button>
+<p id="settingsMessage" style="font-size:0.9rem;font-weight:600;text-align:center;"></p>
+</div>
+</div>
+<div id="leaderPanel" class="admin-panel hidden">
+<h3>Управление командой</h3>
+<div class="inline-form">
+<input type="text" id="newTeamName" placeholder="Новое название вашей команды">
+<button class="btn" id="saveTeamNameBtn">Изменить название команды</button>
+</div>
+<p id="adminMessage" style="font-size:0.9rem;font-weight:600;"></p>
+</div>
+<div id="usersModal" class="modal-overlay hidden">
+<div class="modal-content">
+<button class="modal-close" id="closeUsersModalBtn">&times;</button>
+<h3 style="margin-bottom:15px;">Управление пользователями системы</h3>
+<h4>Зарегистрировать нового сотрудника в системе:</h4>
+<div class="inline-form">
+<input type="text" id="regName" placeholder="ФИО (как в Гугл Таблице)">
+<input type="email" id="regEmail" placeholder="Email сотрудника">
+<input type="text" id="regTeam" placeholder="Название команды">
+<button class="btn" id="registerUserBtn">Создать аккаунт</button>
+</div>
+<p id="modalAdminMessage" style="font-size:0.9rem;font-weight:600;margin-bottom:20px;"></p>
+<h4 style="margin-bottom:10px;font-size:1rem;">Список пользователей (Сотрудники)</h4>
+<div style="overflow-x:auto;">
+<table class="user-management-table">
+<thead>
+<tr><th>ФИО Специалиста</th><th>Email</th><th>Команда</th><th>Новый пароль</th><th>Действия</th></tr>
+</thead>
+<tbody id="userManagementRows"></tbody>
+</table>
+</div>
+</div>
+</div>
+<div id="weekDetailsModal" class="modal-overlay hidden">
+<div class="modal-content">
+<button class="modal-close" id="closeWeekModalBtn">&times;</button>
+<h3 id="weekModalTitle" style="color:var(--text-main);margin-bottom:5px;">-</h3>
+<p id="weekModalEmpName" style="color:var(--text-muted);font-size:0.95rem;font-weight:600;margin-bottom:15px;"></p>
+<div style="overflow-x:auto;">
+<table class="detail-calls-table">
+<thead>
+<tr><th style="width:50%;">Критерии чек-листа оценки качества</th><th style="text-align:center;">Разговор 1</th><th style="text-align:center;">Разговор 2</th><th style="text-align:center;">Разговор 3</th><th style="text-align:center;">Разговор 4</th><th style="text-align:center;">Разговор 5</th></tr>
+</thead>
+<tbody id="weekModalTableRows"></tbody>
+</table>
+</div>
+<div style="margin-top:20px;padding:15px;background:var(--input-bg);border-radius:8px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);">
+<div>⚡ <strong>Оценка за неделю:</strong></div>
+<div id="weekModalSaValue" style="font-size:1.3rem;font-weight:800;padding:5px 12px;border-radius:6px;">-</div>
+</div>
+<button class="btn" id="closeWeekModalActionBtn" style="width:100%;margin-top:15px;background:#4a5568;">Закрыть окно просмотра</button>
+</div>
+</div>
+<div id="statsBar" class="stats-bar hidden">
+<div class="stat-card" style="border-left-color:#3182ce;"><p>Сотрудников in подчинении</p><h3 id="statTotal">-</h3></div>
+<div class="stat-card" style="border-left-color:var(--success);"><p>Средний ОУК команды</p><h3 id="statAvg">-</h3></div>
+<div class="stat-card" style="border-left-color:#805ad5;"><p>Средний SA команды</p><h3 id="statSaAvg">-</h3></div>
+</div>
+<div id="controlsBar" class="controls hidden"><input type="text" id="searchInput" class="search-input" placeholder="Поиск сотрудника по ФИО..."></div>
+<div id="mobileSortBlock" class="mobile-sort-container">
+<span class="sort-label">Сортировка:</span>
+<div class="mobile-sort-buttons">
+<button class="btn btn-sm" id="mbSortName">📝 По ФИО</button>
+<button class="btn btn-sm" id="mbSortOuk">📊 По ОУК</button>
+<button class="btn btn-sm" id="mbSortSa">⚡ По SA</button>
+</div>
+</div>
+<div id="loader" class="loader">Считывание результатов из Google Таблицы...</div>
+<div id="listContainer" class="list-container hidden">
+<table class="main-list-table">
+<thead>
+<tr><th id="sortName" class="sortable" style="width:30%;">Специалист</th><th style="width:15%;">Команда</th><th id="sortOuk" class="sortable" style="width:27%;">Результаты ОУК (Месяц / Недели)</th><th id="sortSa" class="sortable" style="width:28%;">Результаты SA (Месяц / Недели)</th></tr>
+</thead>
+<tbody id="mainListRows"></tbody>
+</table>
+</div>
+</div>
+</div>
+<script type="module" src="script.js?v=500"></script>
 <script type="module">
-    const settingsPanel = document.getElementById('settingsPanel');
-    document.getElementById('closeSettingsModalBtn').addEventListener('click', () => settingsPanel.classList.add('hidden'));
-    settingsPanel.addEventListener('click', (e) => { if (e.target === settingsPanel) settingsPanel.classList.add('hidden'); });
-
-    const themeToggleBtn = document.getElementById('themeToggleBtn');
-    function updateBtnText() {
-        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-        themeToggleBtn.innerText = isDark ? '☀️ Вкл' : '🌙 Выкл';
-    }
-    updateBtnText();
-
-    themeToggleBtn.addEventListener('click', () => {
-        const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
-        if (isDark) {
-            document.documentElement.removeAttribute('data-theme');
-            localStorage.setItem('site-theme', 'light');
-        } else {
-            document.documentElement.setAttribute('data-theme', 'dark');
-            localStorage.setItem('site-theme', 'dark');
-        }
-        updateBtnText();
-    });
-
-    document.addEventListener('click', (e) => {
-        if(e.target.id === 'mbSortName') document.getElementById('sortName').click();
-        if(e.target.id === 'mbSortOuk') document.getElementById('sortOuk').click();
-        if(e.target.id === 'mbSortSa') document.getElementById('sortSa').click();
-    });
+const sPanel=document.getElementById('settingsPanel'); const wModal=document.getElementById('weekDetailsModal');
+document.getElementById('closeSettingsModalBtn').addEventListener('click',()=>sPanel.classList.add('hidden'));
+sPanel.addEventListener('click',(e)=>{if(e.target===sPanel)sPanel.classList.add('hidden');});
+document.getElementById('closeWeekModalBtn').addEventListener('click',()=>wModal.classList.add('hidden'));
+document.getElementById('closeWeekModalActionBtn').addEventListener('click',()=>wModal.classList.add('hidden'));
+wModal.addEventListener('click',(e)=>{if(e.target===wModal)wModal.classList.add('hidden');});
+const tBtn=document.getElementById('themeToggleBtn');
+tBtn.addEventListener('click',()=>{
+if(document.documentElement.getAttribute('data-theme')==='dark'){
+document.documentElement.removeAttribute('data-theme');localStorage.setItem('site-theme','light');tBtn.innerText='🌙 Выкл';
+}else{
+document.documentElement.setAttribute('data-theme','dark');localStorage.setItem('site-theme','dark');tBtn.innerText='☀️ Вкл';
+}
+});
+if(localStorage.getItem('site-theme')==='dark')tBtn.innerText='☀️ Вкл';
+document.addEventListener('click',(e)=>{
+if(e.target.id==='mbSortName')document.getElementById('sortName').click();
+if(e.target.id==='mbSortOuk')document.getElementById('sortOuk').click();
+if(e.target.id==='mbSortSa')document.getElementById('sortSa').click();
+});
 </script>
 </body>
 </html>
