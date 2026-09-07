@@ -5,8 +5,8 @@ import { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc, writeBa
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
-// Прямой локальный импорт движка Excel без CORS блокировок
-import * as XLSX from "./xlsx.full.mjs";
+// Мост к глобальной библиотеке SheetJS из тега script в index.html (Обходит CORS намертво)
+const XLSX = window.XLSX;
 
 export let currentUserProfile = null;
 const ui = {
@@ -26,7 +26,7 @@ export async function getUserTeamsMap() {
 onAuthStateChanged(auth, async (u) => {
     if (u) {
         let d = await getDoc(doc(db, "users", u.uid));
-        if (!d.exists()) { alert("Профиль отсутствует."); await signOut(auth); return; }
+        if (!d.exists()) { alert("Ваш профиль отсутствует в базе данных. Обратитесь к руководителю."); await signOut(auth); return; }
         currentUserProfile = d.data(); currentUserProfile.uid = u.uid;
         ui.userDisplayName.innerText = currentUserProfile.name; ui.userRoleBadge.innerText = currentUserProfile.role === 'leader' ? 'Руководитель' : 'Сотрудник';
         ui.authScreen.classList.add('hidden'); ui.mainScreen.classList.remove('hidden');
@@ -39,14 +39,14 @@ ui.openUsersModalBtn.addEventListener('click', () => { ui.usersModal.classList.r
 ui.closeUsersModalBtn.addEventListener('click', () => ui.usersModal.classList.add('hidden'));
 
 document.getElementById('loginBtn').addEventListener('click', async () => {
-    try { await signInWithEmailAndPassword(auth, document.getElementById('loginEmail').value, document.getElementById('loginPassword').value); } catch(e){ ui.authError.innerText="Ошибка."; }
+    try { await signInWithEmailAndPassword(auth, document.getElementById('loginEmail').value, document.getElementById('loginPassword').value); } catch(e){ ui.authError.innerText="Неверный логин или пароль."; }
 });
 document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth));
 document.getElementById('toggleSettingsBtn').addEventListener('click', () => { ui.settingsPanel.classList.toggle('hidden'); });
 document.getElementById('syncTableBtn').addEventListener('click', async () => {
     const targetWeek = document.getElementById('syncWeekSelect').value;
-    const fileFile = document.getElementById('excelFileInput')?.files[0];
-    if (!fileFile) { alert("Выберите скачанный файл Excel (.xlsx)!"); return; }
+    const files = ui.excelFileInput?.files;
+    if (!files || files.length === 0) { alert("Выберите скачанный файл Excel (.xlsx) для импорта!"); return; }
 
     ui.modalAdminMessage.style.color = "var(--primary)";
     ui.modalAdminMessage.innerText = `Парсинг вкладок Excel по логике Телеграм-Бота за ${targetWeek} неделю...`;
@@ -64,7 +64,7 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
             let successCount = 0;
 
             for (const emp of employees) {
-                // Ищем лист сотрудника (Имя вкладки в Excel == ФИО сотрудника) как в твоем боте
+                // Ищем в Excel вкладку, имя которой совпадает с ФИО сотрудника
                 const sheetName = workbook.SheetNames.find(s => s.trim().toLowerCase() === emp.name.toLowerCase().trim());
                 if (!sheetName) continue;
 
@@ -76,15 +76,15 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
 
                 lines.forEach((rowCells, index) => {
                     if (!rowCells || rowCells.length === 0) return;
-                    const firstCellText = rowCells[0] ? rowCells[0].toString().toLowerCase().trim() : '';
+                    const firstCellText = rowCells ? rowCells.toString().toLowerCase().trim() : '';
 
-                    // Логика твоего бота: строки 3-13 (индексы 2-12) — критерии качества
+                    // Логика твоего бота: строки 3-13 (индексы 2-12) — критерии качества звонка
                     if (index >= 2 && index <= 12) {
                         const callValues = [];
                         for (let col = 2; col <= 6; col++) {
                             callValues.push(rowCells[col] !== undefined && rowCells[col] !== '' ? rowCells[col].toString().trim() : '-');
                         }
-                        criteriaRows.push({ name: rowCells[0] || `Критерий качества`, calls: callValues });
+                        criteriaRows.push({ name: rowCells || `Критерий качества`, calls: callValues });
                     }
 
                     // Логика твоего бота: строка 16 (индекс 15) — итоговый ОУК звонков оператора
@@ -94,12 +94,12 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
                             oukCalls.push(rowCells[col] !== undefined && rowCells[col] !== '' ? rowCells[col].toString().trim() : '-');
                         }
                         finalOukRows = oukCalls;
-                        weekOukVal = parseNumLocal(rowCells[7]); // Общий итог недели из колонки H (индекс 7)
+                        weekOukVal = parseNumLocal(rowCells); // Общий итог недели из колонки H (индекс 7)
                     }
 
-                    // Логика твоего бота: ячейка C28 (строка 28 -> индекс 27, колонка C -> индекс 2) — Оценка SA
+                    // Логика твоего бота: строка 28 (индекс 27) — Оценка SA (ячейка C28 -> индекс 2)
                     if (index === 27 || firstCellText.includes('оценка sa') || firstCellText.includes('sa')) {
-                        weekSaVal = parseNumLocal(rowCells[2]); 
+                        weekSaVal = parseNumLocal(rowCells); 
                     }
                 });
 
@@ -121,7 +121,7 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
             ui.modalAdminMessage.style.color = "var(--danger)"; ui.modalAdminMessage.innerText = "Ошибка чтения структуры Excel."; console.error(err);
         }
     };
-    reader.readAsArrayBuffer(fileFile);
+    reader.readAsArrayBuffer(files);
 });
 
 document.getElementById('clearScoresBtn').addEventListener('click', async () => {
@@ -143,7 +143,7 @@ document.getElementById('registerUserBtn').addEventListener('click', async () =>
     try {
         const cred = await createUserWithEmailAndPassword(secAuth, email, "123456");
         await setDoc(doc(db, "users", cred.user.uid), { name: name, email: email, role: "employee", teamName: team, history_weeks:{} });
-        ui.modalAdminMessage.style.color = "var(--success)"; ui.modalAdminMessage.innerText = "Создан!";
+        ui.modalAdminMessage.style.color = "var(--success)"; ui.modalAdminMessage.innerText = "Сотрудник добавлен!";
         document.getElementById('regName').value=""; document.getElementById('regEmail').value=""; loadUserManagementList(); startDashboard(currentUserProfile);
     } catch(e) { ui.modalAdminMessage.innerText = "Ошибка."; } finally { await secApp.delete(); }
 });
@@ -162,7 +162,7 @@ async function loadUserManagementList() {
                 <button class="btn btn-sm btn-danger" onclick="window.deleteUserAdmin('${uId}')">Удалить</button></td>`;
             ui.userManagementRows.appendChild(tr);
         });
-    } catch (e) {}
+    } catch (e) { console.error(e); }
 }
 
 window.updateUserTeam = async function(id) { try { await updateDoc(doc(db, "users", id), { teamName: document.getElementById(`team-${id}`).value.trim() }); startDashboard(currentUserProfile); } catch (e) {} };
