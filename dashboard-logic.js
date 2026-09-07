@@ -1,14 +1,14 @@
 import { getUserTeamsMap } from "./auth-logic.js";
 
-const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQTwKJ86LlXzR5Ynx--KzD0ICx79xFXbMkZeMLTgUWJFD9MQ2LAOVZfWyWaZW-hFg3vhxtINAYfZ_Gz/pub?gid=0&single=true&output=csv';
-const DETAILED_CSV_URL = 'https://google.com';
-
-let googleData = []; let detailedCallsData = {}; let filteredData = [];
-let globalUserTeamsMap = {}; let sortStates = { name: false, ouk: true, sa: true };
+let googleData = [];
+let filteredData = [];
+let globalUserTeamsMap = {};
+let sortStates = { name: false, ouk: true, sa: true };
 
 export async function startDashboard(userProfile) {
-    await loadGoogleData(); await loadDetailedCallsData();
+    await fetchEmployeesFromFirestore();
     globalUserTeamsMap = await getUserTeamsMap();
+    
     document.getElementById('loader').style.display = 'none';
     document.getElementById('listContainer').classList.remove('hidden');
 
@@ -16,98 +16,86 @@ export async function startDashboard(userProfile) {
         document.getElementById('leaderPanel').classList.remove('hidden');
         document.getElementById('statsBar').classList.remove('hidden');
         document.getElementById('controlsBar').classList.remove('hidden');
+        
         const leaderTeam = (userProfile.teamName || '').toLowerCase().trim();
-        filteredData = googleData.filter(u => (globalUserTeamsMap[u.name.toLowerCase().trim()] || '').toLowerCase().trim() === leaderTeam);
-        sortData('ouk', true); updateStats(filteredData);
+        filteredData = googleData.filter(u => {
+            const employeeTeam = (globalUserTeamsMap[u.name.toLowerCase().trim()] || '').toLowerCase().trim();
+            return employeeTeam === leaderTeam;
+        });
+        
+        sortData('ouk', true);
+        updateStats(filteredData);
     } else {
         document.getElementById('leaderPanel').classList.add('hidden');
         document.getElementById('statsBar').classList.add('hidden');
         document.getElementById('controlsBar').classList.add('hidden');
+        
         filteredData = googleData.filter(u => u.name.toLowerCase() === userProfile.name.toLowerCase());
         renderList(filteredData);
     }
     setupSortListeners();
 }
 
-async function loadGoogleData() {
+async function fetchEmployeesFromFirestore() {
     try {
-        const res = await fetch(CSV_URL); const text = await res.text(); const lines = text.split(/\r?\n/);
+        const snap = await google.firestore().collection("users").get();
         googleData = [];
-        for (let i = 2; i < lines.length; i++) {
-            if (!lines[i].trim()) continue; const row = parseCsvRow(lines[i]); if (row.length < 17) continue;
-            const fName = safeTrim(row[0]); const role = safeTrim(row[1]);
-            if (!fName || fName.toLowerCase().includes('общая') || fName.startsWith('http')) continue;
-            googleData.push({
-                name: fName, role: role || 'Не указана',
-                oukWeeks: [row[2], row[3], row[4], row[5], row[6]].map(v => parseNum(v)), oukTotal: parseNum(row[15]),
-                saWeeks: [row[8], row[9], row[10], row[11], row[12]].map(v => parseNum(v)), saTotal: parseNum(row[16])
-            });
-        }
-    } catch (e) { console.error(e); }
-}
+        snap.forEach(d => {
+            const data = d.data();
+            if (data.role === 'employee') {
+                const oukWeeks = [data.ouk_w1, data.ouk_w2, data.ouk_w3, data.ouk_w4, data.ouk_w5].map(v => v ?? null);
+                const saWeeks = [data.sa_w1, data.sa_w2, data.sa_w3, data.sa_w4, data.sa_w5].map(v => v ?? null);
+                const validOuk = oukWeeks.filter(v => v !== null);
+                const oukTotal = validOuk.length ? validOuk.reduce((s,v)=>s+v,0)/validOuk.length : null;
+                const validSa = saWeeks.filter(v => v !== null);
+                const saTotal = validSa.length ? validSa.reduce((s,v)=>s+v,0)/validSa.length : null;
 
-async function loadDetailedCallsData() {
-    try {
-        const res = await fetch(DETAILED_CSV_URL); if(!res.ok) return;
-        const text = await res.text(); const lines = text.split(/\r?\n/).map(l => parseCsvRow(l));
-        detailedCallsData = {}; let currentEmp = "";
-        lines.forEach((row, index) => {
-            if (!row || row.length < 2) return; const checkCell = safeTrim(row[0]).toLowerCase();
-            if (row[0] && !row[1] && row[0].toString().length > 3) {
-                currentEmp = safeTrim(row[0]).toLowerCase();
-                detailedCallsData[currentEmp] = { criteria: [], finalOuk: ["-","-","-","-","-"], sa: "-" }; return;
-            }
-            if (!currentEmp || !detailedCallsData[currentEmp]) return;
-            if (row[0] !== undefined && row[0] !== "" && index >= 2 && index <= 12) {
-                detailedCallsData[currentEmp].criteria.push({ name: row[0], calls: [row[2], row[3], row[4], row[5], row[6]].map(v => v || "-") });
-            }
-            if (checkCell.includes("итоговый") || checkCell.includes("результат")) {
-                detailedCallsData[currentEmp].finalOuk = [row[2], row[3], row[4], row[5], row[6]].map(v => v || "-");
-            }
-            if (checkCell.includes("sa") || checkCell.includes("speech")) {
-                detailedCallsData[currentEmp].sa = row[2] || "-";
+                googleData.push({
+                    id: d.id, name: data.name, role: data.role || 'Не указана',
+                    oukWeeks, oukTotal, saWeeks, saTotal, rawData: data.history_weeks || {}
+                });
             }
         });
-    } catch(e) { console.warn(e); }
+    } catch(e) { console.error(e); }
 }
-window.openDetailedWeekModal = function(name, metricType, weekNum, value) {
-    const modal = document.getElementById('weekDetailsModal');
-    document.getElementById('weekModalTitle').innerText = `${metricType} — Неделя ${weekNum}`;
-    document.getElementById('weekModalEmpName').innerText = name;
-    const empKey = name.toLowerCase().trim(); const hData = detailedCallsData[empKey];
-    const tBody = document.getElementById('weekModalTableRows'); tBody.innerHTML = '';
 
-    if (!hData || !hData.criteria || hData.criteria.length === 0) {
-        tBody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;">Детальные критерии для ${name} еще не внесены на лист Детализации.</td></tr>`;
-        document.getElementById('weekModalSaValue').innerText = fmt(value) + "%";
-        document.getElementById('weekModalSaValue').className = metricType === 'ОУК' ? getOukClass(value) : getSaClass(value);
-        modal.classList.remove('hidden'); return;
+window.openDetailedWeekModal = function(user, weekNum) {
+    const modal = document.getElementById('weekDetailsModal');
+    document.getElementById('weekModalTitle').innerText = `Детализация Чек-листа за ${weekNum} неделю`;
+    document.getElementById('weekModalEmpName').innerText = user.name;
+
+    const hData = user.rawData && user.rawData[`w${weekNum}`] ? user.rawData[`w${weekNum}`] : null;
+    const tBody = document.getElementById('weekModalTableRows');
+    tBody.innerHTML = '';
+
+    if (!hData || !hData.criteria) {
+        tBody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">Разговоры за эту неделю ещё не импортировались руководителем.</td></tr>';
+        document.getElementById('weekModalSaValue').innerText = '-';
+        document.getElementById('weekModalSaValue').className = 'bg-none';
+        modal.classList.remove('hidden');
+        return;
     }
+
     hData.criteria.forEach(c => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${c.name}</td>${c.calls.map(val => `<td style="text-align:center;">${val}</td>`).join('')}`;
+        tr.innerHTML = `<td style="font-weight:600;">${c.name}</td>${c.calls.map(val => `<td style="text-align:center;">${val}</td>`).join('')}`;
         tBody.appendChild(tr);
     });
+
+    const finalOuk = hData.finalOukRows || ['-', '-', '-', '-', '-'];
     const trOuk = document.createElement('tr');
     trOuk.innerHTML = `<td style="font-weight:700; background:var(--input-bg);">ИТОГОВЫЙ ОУК РАЗГОВОРОВ</td>
-        ${hData.finalOuk.map(v => `<td style="text-align:center; font-weight:700;" class="${getOukClass(parseFloat(v))}">${v}${isNaN(parseFloat(v))?'':'%'}</td>`).join('')}`;
+        ${finalOuk.map(v => `<td style="text-align:center; font-weight:700;" class="${getOukClass(parseFloat(v))}">${v}${isNaN(parseFloat(v)) ? '' : '%'}</td>`).join('')}`;
     tBody.appendChild(trOuk);
-    document.getElementById('weekModalSaValue').innerText = hData.sa + (isNaN(parseFloat(hData.sa)) ? '' : '%');
-    document.getElementById('weekModalSaValue').className = getSaClass(parseFloat(hData.sa));
+
+    const saVal = hData.saValue !== null ? parseFloat(hData.saValue) : null;
+    document.getElementById('weekModalSaValue').innerText = saVal !== null ? `${saVal.toFixed(1)}%` : '-';
+    document.getElementById('weekModalSaValue').className = getSaClass(saVal);
+
     modal.classList.remove('hidden');
 };
 
-function parseCsvRow(t) {
-    let r = ['']; let q = false;
-    for (let i = 0; i < t.length; i++) {
-        if (t[i] === '"') { q = !q; continue; }
-        if (t[i] === ',' && !q) { r.push(''); continue; } r[r.length - 1] += t[i];
-    }
-    return r;
-}
 function safeTrim(v) { return typeof v === 'string' ? v.trim() : (v ? String(v).trim() : ''); }
-// Обновленный парсинг чисел, убирающий знак %
-function parseNum(v) { v = safeTrim(v).replace('%',''); if (!v || v === '0' || v.includes('-')) return null; let n = parseFloat(v.replace(',', '.')); return isNaN(n) ? null : n; }
 function getOukClass(v) { return v === null ? 'bg-none' : (v >= 90 ? 'bg-good' : (v >= 85 ? 'bg-normal' : 'bg-bad')); }
 function getSaClass(v) { return v === null ? 'bg-none' : (v >= 85 ? 'bg-good' : (v >= 70 ? 'bg-normal' : 'bg-bad')); }
 function fmt(v) { return v === null ? '-' : v.toFixed(1); }
@@ -124,6 +112,7 @@ function sortData(field, forceDirection = null) {
     });
     renderList(filteredData);
 }
+
 function setupSortListeners() {
     const bName = document.getElementById('sortName'); const bOuk = document.getElementById('sortOuk'); const bSa = document.getElementById('sortSa');
     if(bName && !bName.dataset.hooked) { bName.addEventListener('click', () => sortData('name')); bName.dataset.hooked = true; }
@@ -141,12 +130,18 @@ function renderList(data) {
             <td><div class="emp-profile"><div class="emp-avatar">${user.name.slice(0,2).toUpperCase()}</div><div><div class="emp-name">${user.name}</div><div class="emp-role-tag">${user.role}</div></div></div></td>
             <td><span class="emp-team-badge">${currentTeam}</span></td>
             <td><div class="metric-cell-wrapper"><div class="total-score-badge ${getOukClass(user.oukTotal)}">${fmt(user.oukTotal)}%</div>
-                <div class="weeks-mini-row">${user.oukWeeks.map((v, i) => `<div class="week-mini-box ${getOukClass(v)}" style="cursor:pointer;" onclick="window.openDetailedWeekModal('${user.name}', 'ОУК', ${i+1}, ${v})">${fmt(v)}</div>`).join('')}</div></div></td>
+                <div class="weeks-mini-row">${user.oukWeeks.map((v, i) => `<div class="week-mini-box ${getOukClass(v)}" style="cursor:pointer;" id="oukClick-${user.id}-${i+1}">${fmt(v)}</div>`).join('')}</div></div></td>
             <td><div class="metric-cell-wrapper"><div class="total-score-badge ${getSaClass(user.saTotal)}">${fmt(user.saTotal)}%</div>
-                <div class="weeks-mini-row">${user.saWeeks.map((v, i) => `<div class="week-mini-box ${getSaClass(v)}" style="cursor:pointer;" onclick="window.openDetailedWeekModal('${user.name}', 'Speech Analytics', ${i+1}, ${v})">${fmt(v)}</div>`).join('')}</div></div></td>`;
+                <div class="weeks-mini-row">${user.saWeeks.map((v, i) => `<div class="week-mini-box ${getSaClass(v)}" style="cursor:pointer;" id="saClick-${user.id}-${i+1}">${fmt(v)}</div>`).join('')}</div></div></td>`;
         rows.appendChild(tr);
+
+        for(let w = 1; w <= 5; w++) {
+            document.getElementById(`oukClick-${user.id}-${w}`).addEventListener('click', () => window.openDetailedWeekModal(user, w));
+            document.getElementById(`saClick-${user.id}-${w}`).addEventListener('click', () => window.openDetailedWeekModal(user, w));
+        }
     });
 }
+
 function updateStats(data) {
     document.getElementById('statTotal').innerText = data.length;
     const validOuk = data.map(u => u.oukTotal).filter(v => v !== null && v > 0);
@@ -154,8 +149,8 @@ function updateStats(data) {
     const validSa = data.map(u => u.saTotal).filter(v => v !== null && v > 0);
     if(validSa.length > 0) document.getElementById('statSaAvg').innerText = (validSa.reduce((s,v)=>s+v,0)/validSa.length).toFixed(2)+'%';
 }
+
 document.getElementById('searchInput').addEventListener('input', () => {
     const s = document.getElementById('searchInput').value.toLowerCase();
     renderList(googleData.filter(u => u.name.toLowerCase().includes(s)));
 });
-
