@@ -5,8 +5,9 @@ import { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc, writeBa
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
-// Мост к глобальной библиотеке SheetJS из тега script в index.html (Обходит CORS намертво)
-const XLSX = window.XLSX;
+// Динамически забираем готовый объект библиотеки из окна браузера при каждом обращении
+const XLSX = window.XLSX || globalThis.XLSX;
+
 
 export let currentUserProfile = null;
 const ui = {
