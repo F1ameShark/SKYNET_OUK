@@ -55,8 +55,15 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
     const reader = new FileReader();
     reader.onload = async (e) => {
         try {
+            // ЖЕСТКИЙ МОСТ К КЛИЕНТСКОЙ БИБЛИОТЕКЕ НАПРЯМУЮ В МОМЕНТ ЧТЕНИЯ БЛОБА
+            const currentXLSX = window.XLSX || globalThis.XLSX;
+            if (!currentXLSX) {
+                alert("Критическая ошибка: Движок Excel еще не инициализирован браузером. Обновите страницу через Ctrl+F5.");
+                return;
+            }
+
             const dataBytes = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(dataBytes, { type: 'array' });
+            const workbook = currentXLSX.read(dataBytes, { type: 'array' });
             
             const snap = await getDocs(collection(db, "users"));
             const employees = [];
@@ -69,7 +76,7 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
                 if (!sheetName) continue;
 
                 const worksheet = workbook.Sheets[sheetName];
-                const lines = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+                const lines = currentXLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
                 
                 let weekOukVal = null; let weekSaVal = null;
                 let finalOukRows = ['-', '-', '-', '-', '-']; const criteriaRows = [];
@@ -118,7 +125,6 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
             ui.modalAdminMessage.style.color = "var(--danger)"; ui.modalAdminMessage.innerText = "Ошибка чтения структуры Excel."; console.error(err);
         }
     };
-    // ИСПРАВЛЕНО: передаем конкретный первый файл, а не массив файлов
     reader.readAsArrayBuffer(files[0]);
 });
 
