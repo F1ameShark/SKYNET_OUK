@@ -5,9 +5,6 @@ import { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc, writeBa
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
-// Импортируем собственный локальный автономный парсер Excel
-import * as XLSX from "./xlsx.full.mjs";
-
 export let currentUserProfile = null;
 const ui = {
     authScreen: document.getElementById('authScreen'), mainScreen: document.getElementById('mainScreen'),
@@ -26,7 +23,7 @@ export async function getUserTeamsMap() {
 onAuthStateChanged(auth, async (u) => {
     if (u) {
         let d = await getDoc(doc(db, "users", u.uid));
-        if (!d.exists()) { alert("Профиль отсутствует в базе."); await signOut(auth); return; }
+        if (!d.exists()) { alert("Ваш профиль отсутствует в базе данных. Обратитесь к руководителю."); await signOut(auth); return; }
         currentUserProfile = d.data(); currentUserProfile.uid = u.uid;
         ui.userDisplayName.innerText = currentUserProfile.name; ui.userRoleBadge.innerText = currentUserProfile.role === 'leader' ? 'Руководитель' : 'Сотрудник';
         ui.authScreen.classList.add('hidden'); ui.mainScreen.classList.remove('hidden');
@@ -39,13 +36,14 @@ ui.openUsersModalBtn.addEventListener('click', () => { ui.usersModal.classList.r
 ui.closeUsersModalBtn.addEventListener('click', () => ui.usersModal.classList.add('hidden'));
 
 document.getElementById('loginBtn').addEventListener('click', async () => {
-    try { await signInWithEmailAndPassword(auth, document.getElementById('loginEmail').value, document.getElementById('loginPassword').value); } catch(e){ ui.authError.innerText="Ошибка."; }
+    try { await signInWithEmailAndPassword(auth, document.getElementById('loginEmail').value, document.getElementById('loginPassword').value); } catch(e){ ui.authError.innerText="Неверный логин или пароль."; }
 });
 document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth));
 document.getElementById('toggleSettingsBtn').addEventListener('click', () => { ui.settingsPanel.classList.toggle('hidden'); });
 document.getElementById('syncTableBtn').addEventListener('click', async () => {
     const targetWeek = document.getElementById('syncWeekSelect').value;
-    const filesList = document.getElementById('excelFileInput')?.files;
+    const fileInputElement = document.getElementById('excelFileInput');
+    const filesList = fileInputElement ? fileInputElement.files : null;
     if (!filesList || filesList.length === 0) { alert("Выберите файл Excel (.xlsx)!"); return; }
     ui.modalAdminMessage.style.color = "var(--primary)";
     ui.modalAdminMessage.innerText = `Парсинг структуры Excel за ${targetWeek} неделю...`;
@@ -56,37 +54,37 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
             if (!currentXLSX) { alert("Ошибка: библиотека Excel не готова."); return; }
             const dataBytes = new Uint8Array(e.target.result);
             const workbook = currentXLSX.read(dataBytes, { type: 'array' });
-            const worksheet = workbook.Sheets[workbook.SheetNames.item(0)];
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
             const lines = currentXLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
             const snap = await getDocs(collection(db, "users"));
             const employees = [];
             snap.forEach(d => { if(d.data().role === 'employee') employees.push({ id: d.id, name: d.data().name }); });
             let successCount = 0;
             for (let i = 0; i < lines.length; i++) {
-                const currentRowText = lines.item(i) ? lines.item(i).join(' ').toLowerCase() : '';
+                const currentRowText = lines[i] ? lines[i].join(' ').toLowerCase() : '';
                 if (currentRowText.includes('skyservice') && currentRowText.includes('ос по разговорам')) {
-                    const metaRow = lines.item(i - 1);
+                    const metaRow = lines[i - 1];
                     const metaText = metaRow ? metaRow.join(' ').toLowerCase() : '';
                     const matchedEmp = employees.find(emp => metaText.includes(emp.name.toLowerCase().trim()));
                     if (!matchedEmp) continue;
                     let weekOukVal = null; let weekSaVal = null;
                     let finalOukRows = ['-', '-', '-', '-', '-']; const criteriaRows = [];
                     for (let j = i + 1; j < Math.min(i + 50, lines.length); j++) {
-                        const subRow = lines.item(j); if (!subRow || subRow.length === 0) continue;
+                        const subRow = lines[j]; if (!subRow || subRow.length === 0) continue;
                         const subRowText = subRow.join(' ').toLowerCase();
-                        const firstCellText = subRow.item(0) ? subRow.item(0).toString().toLowerCase().trim() : '';
+                        const firstCellText = subRow[0] ? subRow[0].toString().toLowerCase().trim() : '';
                         if (j >= i + 2 && j <= i + 12) {
                             const callValues = [];
-                            for (let col = 2; col <= 6; col++) { callValues.push(subRow.item(col) !== undefined && subRow.item(col) !== '' ? subRow.item(col).toString().trim() : '-'); }
-                            criteriaRows.push({ name: subRow.item(0) || `Критерий`, calls: callValues });
+                            for (let col = 2; col <= 6; col++) { callValues.push(subRow[col] !== undefined && subRow[col] !== '' ? subRow[col].toString().trim() : '-'); }
+                            criteriaRows.push({ name: subRow[0] || `Критерий`, calls: callValues });
                         }
-                        if (j === i + 13 || (subRow.item(0) === '' && subRow.item(1) === '' && subRow.item(2) !== '')) {
+                        if (j === i + 13 || (subRow[0] === '' && subRow[1] === '' && subRow[2] !== '')) {
                             const oukCalls = [];
-                            for (let col = 2; col <= 6; col++) { oukCalls.push(subRow.item(col) !== undefined && subRow.item(col) !== '' ? subRow.item(col).toString().trim() : '-'); }
+                            for (let col = 2; col <= 6; col++) { oukCalls.push(subRow[col] !== undefined && subRow[col] !== '' ? subRow[col].toString().trim() : '-'); }
                             finalOukRows = oukCalls;
                         }
-                        if (firstCellText === 'оценка оук') weekOukVal = parseNumLocal(subRow.item(1));
-                        if (firstCellText === 'оценка sa') weekSaVal = parseNumLocal(subRow.item(1));
+                        if (firstCellText === 'оценка оук') weekOukVal = parseNumLocal(subRow[1]);
+                        if (firstCellText === 'оценка sa') weekSaVal = parseNumLocal(subRow[1]);
                         if (j > i + 5 && subRowText.includes('skyservice')) break;
                     }
                     const weekPackage = { oukValue: weekOukVal, saValue: weekSaVal, criteria: criteriaRows, finalOukRows: finalOukRows };
@@ -99,7 +97,7 @@ document.getElementById('syncTableBtn').addEventListener('click', async () => {
                 }
             }
             ui.modalAdminMessage.style.color = "var(--success)";
-            ui.modalAdminMessage.innerText = `Успешно! Импортированы детальные данные для ${successCount} специалистов.`;
+            ui.modalAdminMessage.innerText = `Успешно! Детальные данные импортированы для ${successCount} специалистов.`;
             startDashboard(currentUserProfile);
         } catch (err) { ui.modalAdminMessage.style.color = "var(--danger)"; ui.modalAdminMessage.innerText = "Ошибка разбора Excel."; console.error(err); }
     };
