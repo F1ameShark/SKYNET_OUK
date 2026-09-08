@@ -9,16 +9,14 @@
 <link rel="stylesheet" href="style.css">
 <style>
 .modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:1000;padding:10px;}
-.modal-content{background:var(--card-bg);width:95%;max-width:900px;max-height:90vh;padding:25px;border-radius:12px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);overflow-y:auto;position:relative;}
+.modal-content{background:var(--card-bg);width:95%;max-width:850px;max-height:90vh;padding:25px;border-radius:12px;box-shadow:0 20px 25px -5px rgba(0,0,0,0.1);overflow-y:auto;position:relative;}
 .modal-close{position:absolute;top:15px;right:15px;background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--text-muted);line-height:1;}
 .modal-close:hover{color:var(--text-main);}
 .user-management-table,.detail-calls-table{width:100%;border-collapse:collapse;margin-top:15px;font-size:0.9rem;color:var(--text-main);}
 .user-management-table th,.user-management-table td,.detail-calls-table th,.detail-calls-table td{padding:10px;border:1px solid var(--border);text-align:left;}
 .user-management-table th,.detail-calls-table th{background-color:var(--table-th-bg);color:var(--text-muted);font-weight:700;text-transform:uppercase;font-size:0.75rem;}
-.sm-input,.sm-select{padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:0.85rem;background:var(--input-bg);color:var(--text-main);outline:none;}
+.sm-input{padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:0.85rem;background:var(--input-bg);color:var(--text-main);outline:none;}
 .btn-sm{padding:6px 10px;font-size:0.8rem;border-radius:4px;margin-right:5px;}
-.theme-switch-wrapper{display:flex;align-items:center;gap:15px;margin-bottom:25px;padding-bottom:15px;border-bottom:1px solid var(--border);}
-.theme-switch-label{font-size:1rem;font-weight:600;color:var(--text-main);}
 </style>
 <script>
 const savedTheme=localStorage.getItem('site-theme');
@@ -82,14 +80,12 @@ if(savedTheme==='dark')document.documentElement.setAttribute('data-theme','dark'
 <div class="modal-content">
 <button class="modal-close" id="closeUsersModalBtn">&times;</button>
 <h3 style="margin-bottom:15px;">Управление пользователями системы</h3>
-<div style="background:var(--bg-color);padding:15px;border-radius:8px;margin-bottom:20px;display:flex;flex-direction:column;gap:12px;border:1px solid var(--border);">
-<h4 style="margin:0;font-size:0.95rem;color:var(--text-muted);">Зарегистрировать нового сотрудника:</h4>
-<div class="inline-form" style="margin-bottom:0;">
-<input type="text" id="regName" placeholder="Фамилия Имя (как в сводном CSV)">
+<h4>Зарегистрировать нового сотрудника в системе:</h4>
+<div class="inline-form">
+<input type="text" id="regName" placeholder="ФИО (как в Гугл Таблице)">
 <input type="email" id="regEmail" placeholder="Email сотрудника">
 <input type="text" id="regTeam" placeholder="Название команды">
-<button class="btn" id="registerUserBtn" style="background:#2f855a;">Создать аккаунт</button>
-</div>
+<button class="btn" id="registerUserBtn">Создать аккаунт</button>
 </div>
 <p id="modalAdminMessage" style="font-size:0.9rem;font-weight:600;margin-bottom:20px;"></p>
 <h4 style="margin-bottom:10px;font-size:1rem;">Список пользователей (Сотрудники)</h4>
@@ -104,7 +100,7 @@ if(savedTheme==='dark')document.documentElement.setAttribute('data-theme','dark'
 </div>
 </div>
 <div id="weekDetailsModal" class="modal-overlay hidden">
-<div class="modal-content" style="max-width:850px;">
+<div class="modal-content">
 <button class="modal-close" id="closeWeekModalBtn">&times;</button>
 <h3 id="weekModalTitle" style="color:var(--text-main);margin-bottom:5px;">-</h3>
 <p id="weekModalEmpName" style="color:var(--text-muted);font-size:0.95rem;font-weight:600;margin-bottom:15px;"></p>
@@ -117,14 +113,14 @@ if(savedTheme==='dark')document.documentElement.setAttribute('data-theme','dark'
 </table>
 </div>
 <div style="margin-top:20px;padding:15px;background:var(--input-bg);border-radius:8px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);">
-<div>⚡ <strong>Оценка за эту неделю:</strong></div>
+<div>⚡ <strong>Оценка за неделю:</strong></div>
 <div id="weekModalSaValue" style="font-size:1.3rem;font-weight:800;padding:5px 12px;border-radius:6px;">-</div>
 </div>
 <button class="btn" id="closeWeekModalActionBtn" style="width:100%;margin-top:15px;background:#4a5568;">Закрыть окно просмотра</button>
 </div>
 </div>
 <div id="statsBar" class="stats-bar hidden">
-<div class="stat-card" style="border-left-color:#3182ce;"><p>Сотрудников в подчинении</p><h3 id="statTotal">-</h3></div>
+<div class="stat-card" style="border-left-color:#3182ce;"><p>Сотрудников in подчинении</p><h3 id="statTotal">-</h3></div>
 <div class="stat-card" style="border-left-color:var(--success);"><p>Средний ОУК команды</p><h3 id="statAvg">-</h3></div>
 <div class="stat-card" style="border-left-color:#805ad5;"><p>Средний SA команды</p><h3 id="statSaAvg">-</h3></div>
 </div>
@@ -137,7 +133,7 @@ if(savedTheme==='dark')document.documentElement.setAttribute('data-theme','dark'
 <button class="btn btn-sm" id="mbSortSa">⚡ По SA</button>
 </div>
 </div>
-<div id="loader" class="loader">Загрузка данных из системы безопасности...</div>
+<div id="loader" class="loader">Считывание результатов из Google Таблицы...</div>
 <div id="listContainer" class="list-container hidden">
 <table class="main-list-table">
 <thead>
@@ -148,7 +144,7 @@ if(savedTheme==='dark')document.documentElement.setAttribute('data-theme','dark'
 </div>
 </div>
 </div>
-<script type="module" src="script.js?v=9000"></script>
+<script type="module" src="script.js?v=500"></script>
 <script type="module">
 const sPanel=document.getElementById('settingsPanel'); const wModal=document.getElementById('weekDetailsModal');
 document.getElementById('closeSettingsModalBtn').addEventListener('click',()=>sPanel.classList.add('hidden'));
@@ -165,6 +161,11 @@ document.documentElement.setAttribute('data-theme','dark');localStorage.setItem(
 }
 });
 if(localStorage.getItem('site-theme')==='dark')tBtn.innerText='☀️ Вкл';
+document.addEventListener('click',(e)=>{
+if(e.target.id==='mbSortName')document.getElementById('sortName').click();
+if(e.target.id==='mbSortOuk')document.getElementById('sortOuk').click();
+if(e.target.id==='mbSortSa')document.getElementById('sortSa').click();
+});
 </script>
 </body>
 </html>
