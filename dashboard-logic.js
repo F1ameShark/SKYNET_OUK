@@ -1,19 +1,14 @@
-import { db } from "./firebase-config.js";
-import { doc, getDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 import { getUserTeamsMap } from "./auth-logic.js";
 
-// Оригинальная проверенная ссылка на публикацию сводного листа
 const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT2wtg1vy8FT8cgMFFGNecvvhk0GGeUYg_VibkA6g75Nbju7u96webWM5vtkhsygvuhwsOil7FRwVyg/pub?output=csv';
+const DETAILED_CSV_URL = 'https://google.com';
 
-let googleData = [];
-let filteredData = [];
-let globalUserTeamsMap = {};
-let sortStates = { name: false, ouk: true, sa: true };
+let googleData = []; let detailedCallsData = {}; let filteredData = [];
+let globalUserTeamsMap = {}; let sortStates = { name: false, ouk: true, sa: true };
 
 export async function startDashboard(userProfile) {
-    await loadGoogleData();
+    await loadGoogleData(); await loadDetailedCallsData();
     globalUserTeamsMap = await getUserTeamsMap();
-    
     document.getElementById('loader').style.display = 'none';
     document.getElementById('listContainer').classList.remove('hidden');
 
@@ -21,20 +16,13 @@ export async function startDashboard(userProfile) {
         document.getElementById('leaderPanel').classList.remove('hidden');
         document.getElementById('statsBar').classList.remove('hidden');
         document.getElementById('controlsBar').classList.remove('hidden');
-        
         const leaderTeam = (userProfile.teamName || '').toLowerCase().trim();
-        filteredData = googleData.filter(u => {
-            const employeeTeam = (globalUserTeamsMap[u.name.toLowerCase().trim()] || '').toLowerCase().trim();
-            return employeeTeam === leaderTeam;
-        });
-        
-        sortData('ouk', true);
-        updateStats(filteredData);
+        filteredData = googleData.filter(u => (globalUserTeamsMap[u.name.toLowerCase().trim()] || '').toLowerCase().trim() === leaderTeam);
+        sortData('ouk', true); updateStats(filteredData);
     } else {
         document.getElementById('leaderPanel').classList.add('hidden');
         document.getElementById('statsBar').classList.add('hidden');
         document.getElementById('controlsBar').classList.add('hidden');
-        
         filteredData = googleData.filter(u => u.name.toLowerCase() === userProfile.name.toLowerCase());
         renderList(filteredData);
     }
@@ -43,81 +31,70 @@ export async function startDashboard(userProfile) {
 
 async function loadGoogleData() {
     try {
-        const res = await fetch(CSV_URL);
-        const text = await res.text();
-        const lines = text.split(/\r?\n/);
+        const res = await fetch(CSV_URL); const text = await res.text(); const lines = text.split(/\r?\n/);
         googleData = [];
         for (let i = 2; i < lines.length; i++) {
-            if (!lines[i].trim()) continue;
-            const row = parseCsvRow(lines[i]);
-            if (row.length < 17) continue;
+            if (!lines[i].trim()) continue; const row = parseCsvRow(lines[i]); if (row.length < 17) continue;
             const fName = safeTrim(row[0]); const role = safeTrim(row[1]);
             if (!fName || fName.toLowerCase().includes('общая') || fName.startsWith('http')) continue;
             googleData.push({
                 name: fName, role: role || 'Не указана',
-                oukWeeks: [row[2], row[3], row[4], row[5], row[6]].map(v => parseNum(v)), 
-                oukTotal: parseNum(row[15]), 
-                saWeeks: [row[8], row[9], row[10], row[11], row[12]].map(v => parseNum(v)), 
-                saTotal: parseNum(row[16])
+                oukWeeks: [row[2], row[3], row[4], row[5], row[6]].map(v => parseNum(v)), oukTotal: parseNum(row[15]),
+                saWeeks: [row[8], row[9], row[10], row[11], row[12]].map(v => parseNum(v)), saTotal: parseNum(row[16])
             });
         }
     } catch (e) { console.error(e); }
 }
-window.openDetailedWeekModal = async function(name, metricType, weekNum, value) {
+
+async function loadDetailedCallsData() {
+    try {
+        const res = await fetch(DETAILED_CSV_URL); if(!res.ok) return;
+        const text = await res.text(); const lines = text.split(/\r?\n/).map(l => parseCsvRow(l));
+        detailedCallsData = {}; let currentEmp = "";
+        lines.forEach((row, index) => {
+            if (!row || row.length < 2) return; const checkCell = safeTrim(row[0]).toLowerCase();
+            if (row[0] && !row[1] && row[0].toString().length > 3) {
+                currentEmp = safeTrim(row[0]).toLowerCase();
+                detailedCallsData[currentEmp] = { criteria: [], finalOuk: ["-","-","-","-","-"], sa: "-" }; return;
+            }
+            if (!currentEmp || !detailedCallsData[currentEmp]) return;
+            if (row[0] !== undefined && row[0] !== "" && index >= 2 && index <= 12) {
+                detailedCallsData[currentEmp].criteria.push({ name: row[0], calls: [row[2], row[3], row[4], row[5], row[6]].map(v => v || "-") });
+            }
+            if (checkCell.includes("итоговый") || checkCell.includes("результат")) {
+                detailedCallsData[currentEmp].finalOuk = [row[2], row[3], row[4], row[5], row[6]].map(v => v || "-");
+            }
+            if (checkCell.includes("sa") || checkCell.includes("speech")) {
+                detailedCallsData[currentEmp].sa = row[2] || "-";
+            }
+        });
+    } catch(e) { console.warn(e); }
+}
+window.openDetailedWeekModal = function(name, metricType, weekNum, value) {
     const modal = document.getElementById('weekDetailsModal');
     document.getElementById('weekModalTitle').innerText = `${metricType} — Неделя ${weekNum}`;
     document.getElementById('weekModalEmpName').innerText = name;
-    
-    const tBody = document.getElementById('weekModalTableRows');
-    tBody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:15px;">Поиск детального чек-листа в базе данных...</td></tr>';
-    document.getElementById('weekModalSaValue').innerText = '-';
-    modal.classList.remove('hidden');
+    const empKey = name.toLowerCase().trim(); const hData = detailedCallsData[empKey];
+    const tBody = document.getElementById('weekModalTableRows'); tBody.innerHTML = '';
 
-    try {
-        // Ищем специалиста в Firebase по его ФИО, чтобы вытащить UID документа
-        const snap = await google.firestore().collection("users").where("name", "==", name).get();
-        let hData = null;
-        
-        if (!snap.empty) {
-            const userDocData = snap.docs[0].data();
-            hData = userDocData.history_weeks ? userDocData.history_weeks[`w${weekNum}`] : null;
-        }
-
-        // Если данные сохранены твоим бэкендом в виде JSON-строки, распаковываем её
-        if (typeof hData === 'string') {
-            try { hData = JSON.parse(hData); } catch(e) { hData = null; }
-        }
-
-        tBody.innerHTML = '';
-
-        // Если детальный чек-лист отсутствует в Firestore, просто выводим общую оценку за неделю из CSV
-        if (!hData || !hData.criteria) {
-            tBody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">Развернутый чек-лист разговоров отсутствует в базе данных. Выводится общая оценка недели: ${fmt(value)}%</td></tr>`;
-            document.getElementById('weekModalSaValue').innerText = fmt(value) + "%";
-            document.getElementById('weekModalSaValue').className = metricType === 'ОУК' ? getOukClass(value) : getSaClass(value);
-            return;
-        }
-
-        // Если чек-лист найден, строим красивую детальную интерактивную таблицу звонков
-        hData.criteria.forEach(c => {
-            const tr = document.createElement('tr');
-            tr.innerHTML = `<td style="font-weight:600;">${c.name}</td>${c.calls.map(val => `<td style="text-align:center;">${val}</td>`).join('')}`;
-            tBody.appendChild(tr);
-        });
-
-        const finalOuk = hData.finalOukRows || ['-', '-', '-', '-', '-'];
-        const trOuk = document.createElement('tr');
-        trOuk.innerHTML = `<td style="font-weight:700; background:var(--input-bg);">ИТОГОВЫЙ ОУК РАЗГОВОРОВ</td>
-            ${finalOuk.map(v => `<td style="text-align:center; font-weight:700;" class="${getOukClass(parseFloat(v))}">${v}${isNaN(parseFloat(v))?'':'%'}</td>`).join('')}`;
-        tBody.appendChild(trOuk);
-
-        const saVal = hData.saValue !== null ? parseFloat(hData.saValue) : null;
-        document.getElementById('weekModalSaValue').innerText = saVal !== null ? `${saVal.toFixed(1)}%` : '-';
-        document.getElementById('weekModalSaValue').className = getSaClass(saVal);
-
-    } catch (err) {
-        tBody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:15px;color:var(--danger);">Ошибка подключения к Firebase.</td></tr>';
+    if (!hData || !hData.criteria || hData.criteria.length === 0) {
+        tBody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;">Детальные критерии для ${name} еще не внесены на лист Детализации.</td></tr>`;
+        document.getElementById('weekModalSaValue').innerText = fmt(value) + "%";
+        document.getElementById('weekModalSaValue').className = metricType === 'ОУК' ? getOukClass(value) : getSaClass(value);
+        modal.classList.remove('hidden'); return;
     }
+    hData.criteria.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${c.name}</td>${c.calls.map(val => `<td style="text-align:center;">${val}</td>`).join('')}`;
+        tBody.appendChild(tr);
+    });
+    const trOuk = document.createElement('tr');
+    trOuk.innerHTML = `<td style="font-weight:700; background:var(--input-bg);">ИТОГОВЫЙ ОУК РАЗГОВОРОВ</td>
+        ${hData.finalOuk.map(v => `<td style="text-align:center; font-weight:700;" class="${getOukClass(parseFloat(v))}">${v}${isNaN(parseFloat(v))?'':'%'}</td>`).join('')}`;
+    tBody.appendChild(trOuk);
+    document.getElementById('weekModalSaValue').innerText = hData.sa + (isNaN(parseFloat(hData.sa)) ? '' : '%');
+    document.getElementById('weekModalSaValue').className = getSaClass(parseFloat(hData.sa));
+    modal.classList.remove('hidden');
 };
 
 function parseCsvRow(t) {
@@ -129,7 +106,8 @@ function parseCsvRow(t) {
     return r;
 }
 function safeTrim(v) { return typeof v === 'string' ? v.trim() : (v ? String(v).trim() : ''); }
-function parseNum(v) { v = safeTrim(v); if (!v || v === '0' || v.includes('-')) return null; let n = parseFloat(v.replace(',', '.')); return isNaN(n) ? null : n; }
+// Обновленный парсинг чисел, убирающий знак %
+function parseNum(v) { v = safeTrim(v).replace('%',''); if (!v || v === '0' || v.includes('-')) return null; let n = parseFloat(v.replace(',', '.')); return isNaN(n) ? null : n; }
 function getOukClass(v) { return v === null ? 'bg-none' : (v >= 90 ? 'bg-good' : (v >= 85 ? 'bg-normal' : 'bg-bad')); }
 function getSaClass(v) { return v === null ? 'bg-none' : (v >= 85 ? 'bg-good' : (v >= 70 ? 'bg-normal' : 'bg-bad')); }
 function fmt(v) { return v === null ? '-' : v.toFixed(1); }
@@ -147,16 +125,15 @@ function sortData(field, forceDirection = null) {
     renderList(filteredData);
 }
 function setupSortListeners() {
-    const btnName = document.getElementById('sortName'); const btnOuk = document.getElementById('sortOuk'); const btnSa = document.getElementById('sortSa');
-    if(btnName && !btnName.dataset.hooked) { btnName.addEventListener('click', () => sortData('name')); btnName.dataset.hooked = true; }
-    if(btnOuk && !btnOuk.dataset.hooked) { btnOuk.addEventListener('click', () => sortData('ouk')); btnOuk.dataset.hooked = true; }
-    if(btnSa && !btnSa.dataset.hooked) { btnSa.addEventListener('click', () => sortData('sa')); btnSa.dataset.hooked = true; }
+    const bName = document.getElementById('sortName'); const bOuk = document.getElementById('sortOuk'); const bSa = document.getElementById('sortSa');
+    if(bName && !bName.dataset.hooked) { bName.addEventListener('click', () => sortData('name')); bName.dataset.hooked = true; }
+    if(bOuk && !bOuk.dataset.hooked) { bOuk.addEventListener('click', () => sortData('ouk')); bOuk.dataset.hooked = true; }
+    if(bSa && !bSa.dataset.hooked) { bSa.addEventListener('click', () => sortData('sa')); bSa.dataset.hooked = true; }
 }
 
 function renderList(data) {
-    const rowsContainer = document.getElementById('mainListRows'); if(!rowsContainer) return; rowsContainer.innerHTML = '';
-    if (data.length === 0) { rowsContainer.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:30px;color:var(--text-muted);">Ничего не найдено</td></tr>'; return; }
-
+    const rows = document.getElementById('mainListRows'); if(!rows) return; rows.innerHTML = '';
+    if (data.length === 0) { rows.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:30px;">Ничего не найдено</td></tr>'; return; }
     data.forEach(user => {
         const currentTeam = globalUserTeamsMap[user.name.toLowerCase().trim()] || 'Без команды';
         const tr = document.createElement('tr');
@@ -164,17 +141,12 @@ function renderList(data) {
             <td><div class="emp-profile"><div class="emp-avatar">${user.name.slice(0,2).toUpperCase()}</div><div><div class="emp-name">${user.name}</div><div class="emp-role-tag">${user.role}</div></div></div></td>
             <td><span class="emp-team-badge">${currentTeam}</span></td>
             <td><div class="metric-cell-wrapper"><div class="total-score-badge ${getOukClass(user.oukTotal)}">${fmt(user.oukTotal)}%</div>
-                <div class="weeks-mini-row">
-                    ${user.oukWeeks.map((v, i) => `<div class="week-mini-box ${getOukClass(v)}" style="cursor:pointer;" onclick="window.openDetailedWeekModal('${user.name}', 'ОУК', ${i+1}, ${v})">${fmt(v)}</div>`).join('')}
-                </div></div></td>
+                <div class="weeks-mini-row">${user.oukWeeks.map((v, i) => `<div class="week-mini-box ${getOukClass(v)}" style="cursor:pointer;" onclick="window.openDetailedWeekModal('${user.name}', 'ОУК', ${i+1}, ${v})">${fmt(v)}</div>`).join('')}</div></div></td>
             <td><div class="metric-cell-wrapper"><div class="total-score-badge ${getSaClass(user.saTotal)}">${fmt(user.saTotal)}%</div>
-                <div class="weeks-mini-row">
-                    ${user.saWeeks.map((v, i) => `<div class="week-mini-box ${getSaClass(v)}" style="cursor:pointer;" onclick="window.openDetailedWeekModal('${user.name}', 'Speech Analytics', ${i+1}, ${v})">${fmt(v)}</div>`).join('')}
-                </div></div></td>`;
-        rowsContainer.appendChild(tr);
+                <div class="weeks-mini-row">${user.saWeeks.map((v, i) => `<div class="week-mini-box ${getSaClass(v)}" style="cursor:pointer;" onclick="window.openDetailedWeekModal('${user.name}', 'Speech Analytics', ${i+1}, ${v})">${fmt(v)}</div>`).join('')}</div></div></td>`;
+        rows.appendChild(tr);
     });
 }
-
 function updateStats(data) {
     document.getElementById('statTotal').innerText = data.length;
     const validOuk = data.map(u => u.oukTotal).filter(v => v !== null && v > 0);
@@ -182,7 +154,6 @@ function updateStats(data) {
     const validSa = data.map(u => u.saTotal).filter(v => v !== null && v > 0);
     if(validSa.length > 0) document.getElementById('statSaAvg').innerText = (validSa.reduce((s,v)=>s+v,0)/validSa.length).toFixed(2)+'%';
 }
-
 document.getElementById('searchInput').addEventListener('input', () => {
     const s = document.getElementById('searchInput').value.toLowerCase();
     renderList(googleData.filter(u => u.name.toLowerCase().includes(s)));
