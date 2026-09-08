@@ -1,6 +1,6 @@
 import { getUserTeamsMap } from "./auth-logic.js";
 
-const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT2wtg1vy8FT8cgMFFGNecvvhk0GGeUYg_VibkA6g75Nbju7u96webWM5vtkhsygvuhwsOil7FRwVyg/pub?output=csv';
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQTwKJ86LlXzR5Ynx--KzD0ICx79xFXbMkZeMLTgUWJFD9MQ2LAOVZfWyWaZW-hFg3vhxtINAYfZ_Gz/pub?gid=0&single=true&output=csv';
 const DETAILED_CSV_URL = 'https://google.com';
 
 let googleData = []; let detailedCallsData = {}; let filteredData = [];
