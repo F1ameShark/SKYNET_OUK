@@ -1,5 +1,5 @@
 import { db } from "./firebase-config.js";
-import { collection, getDocs } from "https://gstatic.com";
+import { collection, getDocs } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 
 let googleData = []; let filteredData = [];
 let sortStates = { name: false, ouk: true, sa: true };
