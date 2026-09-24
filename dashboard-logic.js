@@ -58,43 +58,47 @@ async function fetchEmployeesFromFirestore() {
 }
 window.openDetailedWeekModal = function(user, weekNum) {
     const modal = document.getElementById('weekDetailsModal');
-    document.getElementById('weekModalTitle').innerText = `Детализация за ${weekNum} неделю`;
+    document.getElementById('weekModalTitle').innerText = "Детализация за " + weekNum + " неделю";
     document.getElementById('weekModalEmpName').innerText = user.name;
 
-    let hData = user.rawData && user.rawData[`w${weekNum}`] ? user.rawData[`w${weekNum}`] : null;
+    let hData = user.rawData && user.rawData["w" + weekNum] ? user.rawData["w" + weekNum] : null;
     if (typeof hData === 'string') { try { hData = JSON.parse(hData); } catch(e) { hData = null; } }
     
-    const tBody = document.getElementById('weekModalTableRows'); tBody.innerHTML = '';
+    const tBody = document.getElementById('weekModalTableRows'); 
+    tBody.innerHTML = '';
 
     if (!hData || !hData.criteria) {
         const fallbackOuk = user.oukWeeks[weekNum - 1];
         const fallbackSa = user.saWeeks[weekNum - 1];
-        tBody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--text-muted);">Детализация звонков отсутствует. Оценка недели из CSV: ОУК ${fmt(fallbackOuk)}% / SA ${fmt(fallbackSa)}%</td></tr>`;
+        tBody.innerHTML = "<tr><td colspan='6' style='text-align:center;padding:20px;color:var(--text-muted);'>Детализация звонков отсутствует. Оценка недели из CSV: ОУК " + fmt(fallbackOuk) + "% / SA " + fmt(fallbackSa) + "%</td></tr>";
         document.getElementById('weekModalSaValue').innerText = fmt(fallbackOuk) + "%";
         document.getElementById('weekModalSaValue').className = getOukClass(fallbackOuk);
-        modal.classList.remove('hidden'); return;
+        modal.classList.remove('hidden'); 
+        return;
     }
 
     hData.criteria.forEach(c => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td style="font-weight:600;">${c.name}</td>${c.calls.map(val => `<td style="text-align:center;">\${val}</td>`).join('')}`;
+        let callCells = "";
+        c.calls.forEach(val => { callCells += "<td style='text-align:center;'>" + val + "</td>"; });
+        tr.innerHTML = "<td style='font-weight:600;'>" + c.name + "</td>" + callCells;
         tBody.appendChild(tr);
     });
 
     const finalOuk = hData.finalOukRows || ['-', '-', '-', '-', '-'];
     const trOuk = document.createElement('tr');
-    trOuk.innerHTML = `<td style="font-weight:700; background:var(--input-bg);">ИТОГОВЫЙ ОУК РАЗГОВОРОВ</td>
-        ${finalOuk.map(v => `<td style="text-align:center; font-weight:700;" class="\${getOukClass(parseFloat(v))}">v{isNaN(parseFloat(v)) ? '' : '%'}</td>`).join('')}`;
+    let oukCells = "";
+    finalOuk.forEach(v => { oukCells += "<td style='text-align:center; font-weight:700;' class='" + getOukClass(parseFloat(v)) + "'>" + v + (isNaN(parseFloat(v)) ? "" : "%") + "</td>"; });
+    trOuk.innerHTML = "<td style='font-weight:700; background:var(--input-bg);'>ИТОГОВЫЙ ОУК РАЗГОВОРОВ</td>" + oukCells;
     tBody.appendChild(trOuk);
 
     const saVal = hData.saValue !== null ? parseFloat(hData.saValue) : null;
-    document.getElementById('weekModalSaValue').innerText = saVal !== null ? `${saVal.toFixed(1)}%` : '-';
+    document.getElementById('weekModalSaValue').innerText = saVal !== null ? saVal.toFixed(1) + "%" : '-';
     document.getElementById('weekModalSaValue').className = getSaClass(saVal);
     modal.classList.remove('hidden');
 };
 
 function getOukClass(v) { return v === null ? 'bg-none' : (v >= 90 ? 'bg-good' : (v >= 85 ? 'bg-normal' : 'bg-bad')); }
-// Исправлено: принудительно заменяем NaN от #DIV/0! на корректный серый цвет
 function getSaClass(v) { return (v === null || isNaN(v)) ? 'bg-none' : (v >= 85 ? 'bg-good' : (v >= 70 ? 'bg-normal' : 'bg-bad')); }
 function fmt(v) { return (v === null || isNaN(v)) ? '-' : v.toFixed(1); }
 
@@ -120,21 +124,30 @@ function setupSortListeners() {
 
 function renderList(data) {
     const rows = document.getElementById('mainListRows'); if(!rows) return; rows.innerHTML = '';
-    if (data.length === 0) { rows.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:30px;">Ничего не найдено</td></tr>'; return; }
+    if (data.length === 0) { rows.innerHTML = "<tr><td colspan='4' style='text-align:center;padding:30px;'>Ничего не найдено</td></tr>"; return; }
+    
     data.forEach(user => {
         const currentTeam = globalUserTeamsMap[user.name.toLowerCase().trim()] || 'Без команды';
         const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td><div class="emp-profile"><div class="emp-avatar">${user.name.slice(0,2).toUpperCase()}</div><div><div class="emp-name">${user.name}</div><div class="emp-role-tag">${user.role}</div></div></div></td>
-            <td><span class="emp-team-badge">${currentTeam}</span></td>
-            <td><div class="metric-cell-wrapper"><div class="total-score-badge ${getOukClass(user.oukTotal)}">${fmt(user.oukTotal)}%</div>
-                <div class="weeks-mini-row">${user.oukWeeks.map((v, i) => `<div class="week-mini-box getOukClass(v)" style="cursor:pointer;" id="oukClick-{user.id}-i+1">{fmt(v)}</div>`).join('')}</div></div></td>
-            <td><div class="metric-cell-wrapper"><div class="total-score-badge ${getSaClass(user.saTotal)}">${fmt(user.saTotal)}%</div>
-                <div class="weeks-mini-row">${user.saWeeks.map((v, i) => `<div class="week-mini-box getSaClass(v)" style="cursor:pointer;" id="saClick-{user.id}-i+1">{fmt(v)}</div>`).join('')}</div></div></td>`;
+        
+        let oukBoxes = "";
+        user.oukWeeks.forEach((v, i) => { oukBoxes += "<div class='week-mini-box " + getOukClass(v) + "' style='cursor:pointer;' id='oukClick-" + user.id + "-" + (i+1) + "'>" + fmt(v) + "</div>"; });
+        
+        let saBoxes = "";
+        user.saWeeks.forEach((v, i) => { saBoxes += "<div class='week-mini-box " + getSaClass(v) + "' style='cursor:pointer;' id='saClick-" + user.id + "-" + (i+1) + "'>" + fmt(v) + "</div>"; });
+
+        tr.innerHTML = "<td><div class='emp-profile'><div class='emp-avatar'>" + user.name.slice(0,2).toUpperCase() + "</div><div><div class='emp-name'>" + user.name + "</div><div class='emp-role-tag'>" + user.role + "</div></div></div></td>" +
+            "<td><span class='emp-team-badge'>" + currentTeam + "</span></td>" +
+            "<td><div class='metric-cell-wrapper'><div class='total-score-badge " + getOukClass(user.oukTotal) + "'>" + fmt(user.oukTotal) + "%</div><div class='weeks-mini-row'>" + oukBoxes + "</div></div></td>" +
+            "<td><div class=" + "'metric-cell-wrapper'><div class='total-score-badge " + getSaClass(user.saTotal) + "'>" + fmt(user.saTotal) + "%</div><div class='weeks-mini-row'>" + saBoxes + "</div></div></td>";
+        
         rows.appendChild(tr);
+        
         for(let w = 1; w <= 5; w++) {
-            document.getElementById(`oukClick-${user.id}-${w}`).addEventListener('click', () => window.openDetailedWeekModal(user, w));
-            document.getElementById(`saClick-${user.id}-${w}`).addEventListener('click', () => window.openDetailedWeekModal(user, w));
+            const oukEl = document.getElementById("oukClick-" + user.id + "-" + w);
+            const saEl = document.getElementById("saClick-" + user.id + "-" + w);
+            if(oukEl) oukEl.addEventListener('click', () => window.openDetailedWeekModal(user, w));
+            if(saEl) saEl.addEventListener('click', () => window.openDetailedWeekModal(user, w));
         }
     });
 }
