@@ -1,15 +1,17 @@
 import { db } from "./firebase-config.js";
 import { collection, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+import { getUserTeamsMap } from "./auth-logic.js";
 
 let allEmployees = []; 
 let filteredData = [];
-let currentMode = "my_team"; // Режимы: "my_team" или "all_staff"
+let currentMode = "my_team";
 let sortStates = { name: false, team: false, ouk: true, sa: true };
 let currentLeaderProfile = null;
 
 export async function startDashboard(userProfile) {
     currentLeaderProfile = userProfile;
     await fetchEmployeesFromFirestore();
+    globalUserTeamsMap = await getUserTeamsMap();
     
     document.getElementById('loader').style.display = 'none';
     document.getElementById('listContainer').classList.remove('hidden');
@@ -21,8 +23,8 @@ export async function startDashboard(userProfile) {
     const controlsBar = document.getElementById('controlsBar');
 
     if (userProfile.role === 'leader') {
-        if(btnMyTeam) { btnMyTeam.classList.remove('hiddenTab'); btnMyTeam.classList.add('tab-active'); }
-        if(btnAllStaff) btnAllStaff.classList.remove('hiddenTab');
+        if(btnMyTeam) { btnMyTeam.style.display = 'inline-block'; btnMyTeam.classList.add('tab-active'); }
+        if(btnAllStaff) btnAllStaff.style.display = 'inline-block';
         if(leaderPanel) leaderPanel.classList.remove('hidden');
         if(statsBar) statsBar.classList.remove('hidden');
         if(controlsBar) controlsBar.classList.remove('hidden');
@@ -33,8 +35,8 @@ export async function startDashboard(userProfile) {
         setupTabListeners();
         applyActiveFilter();
     } else {
-        if(btnMyTeam) btnMyTeam.classList.add('hiddenTab');
-        if(btnAllStaff) btnAllStaff.classList.add('hiddenTab');
+        if(btnMyTeam) btnMyTeam.style.display = 'none';
+        if(btnAllStaff) btnAllStaff.style.display = 'none';
         if(leaderPanel) leaderPanel.classList.add('hidden');
         if(statsBar) statsBar.classList.add('hidden');
         if(controlsBar) controlsBar.classList.add('hidden');
@@ -111,7 +113,7 @@ window.openDetailedWeekModal = function(user, weekNum) {
 
     if (!hData || !hData.criteria) {
         const fbOuk = user.oukWeeks[weekNum - 1]; const fbSa = user.saWeeks[weekNum - 1];
-        tBody.innerHTML = "<tr><td colspan='6' style='text-align:center;padding:20px;color:var(--text-muted);'>Детализация отсутствует. Оценка за неделю: ОУК " + fmt(fbOuk) + "% / SA " + fmt(fbSa) + "%</td></tr>";
+        tBody.innerHTML = "<tr><td colspan='6' style='text-align:center;padding:20px;color:var(--text-muted);'>Детализация звонков отсутствует. Оценка недели: ОУК " + fmt(fbOuk) + "% / SA " + fmt(fbSa) + "%</td></tr>";
         document.getElementById('weekModalSaValue').innerText = fmt(fbOuk) + "%";
         document.getElementById('weekModalSaValue').className = getOukClass(fbOuk);
         modal.classList.remove('hidden'); return;
@@ -134,6 +136,7 @@ window.openDetailedWeekModal = function(user, weekNum) {
     modal.classList.remove('hidden');
 };
 
+let globalUserTeamsMap = {};
 function getOukClass(v) { return v === null ? 'bg-none' : (v >= 90 ? 'bg-good' : (v >= 85 ? 'bg-normal' : 'bg-bad')); }
 function getSaClass(v) { return (v === null || isNaN(v)) ? 'bg-none' : (v >= 85 ? 'bg-good' : (v >= 70 ? 'bg-normal' : 'bg-bad')); }
 function fmt(v) { return (v === null || isNaN(v)) ? '-' : v.toFixed(1); }
@@ -166,12 +169,14 @@ function renderList(data) {
     if (data.length === 0) { rows.innerHTML = "<tr><td colspan='4' style='text-align:center;padding:30px;'>Ничего не найдено</td></tr>"; return; }
     
     data.forEach(user => {
-        const tr = document.createElement('tr'); let oukBoxes = ""; let saBoxes = "";
+        const currentTeam = user.teamName || 'Без команды';
+        const tr = document.createElement('tr');
+        let oukBoxes = ""; let saBoxes = "";
         user.oukWeeks.forEach((v, i) => { oukBoxes += "<div class='week-mini-box " + getOukClass(v) + "' style='cursor:pointer;' id='oukClick-" + user.id + "-" + (i+1) + "'>" + fmt(v) + "</div>"; });
         user.saWeeks.forEach((v, i) => { saBoxes += "<div class='week-mini-box " + getSaClass(v) + "' style='cursor:pointer;' id='saClick-" + user.id + "-" + (i+1) + "'>" + fmt(v) + "</div>"; });
 
         tr.innerHTML = "<td><div class='emp-profile'><div class='emp-avatar'>" + user.name.slice(0,2).toUpperCase() + "</div><div><div class='emp-name'>" + user.name + "</div><div class='emp-role-tag'>" + user.role + "</div></div></div></td>" +
-            "<td><span class='emp-team-badge'>" + user.teamName + "</span></td>" +
+            "<td><span class='emp-team-badge'>" + currentTeam + "</span></td>" +
             "<td><div class='metric-cell-wrapper'><div class='total-score-badge " + getOukClass(user.oukTotal) + "'>" + fmt(user.oukTotal) + "%</div><div class='weeks-mini-row'>" + oukBoxes + "</div></div></td>" +
             "<td><div class='metric-cell-wrapper'><div class='total-score-badge " + getSaClass(user.saTotal) + "'>" + fmt(user.saTotal) + "%</div><div class='weeks-mini-row'>" + saBoxes + "</div></div></td>";
         rows.appendChild(tr);
@@ -199,9 +204,9 @@ function setupTeamSaveListener() {
         const val = document.getElementById('newTeamName').value.trim(); if(!val) return;
         try {
             await updateDoc(doc(db, "users", currentLeaderProfile.uid), { teamName: val });
-            currentLeaderProfile.teamName = val; alert("Ваша команда успешно изменена! Страница обновится.");
+            currentLeaderProfile.teamName = val; alert("Ваша команда обновлена!");
             startDashboard(currentLeaderProfile);
-        } catch(e) { alert("Ошибка смены команды."); }
+        } catch(e) { alert("Ошибка."); }
     });
     btn.dataset.hooked = true;
 }
