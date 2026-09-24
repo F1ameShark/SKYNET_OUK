@@ -79,10 +79,19 @@ if(savedTheme==='dark')document.documentElement.setAttribute('data-theme','dark'
 <div id="usersModal" class="modal-overlay hidden">
 <div class="modal-content">
 <button class="modal-close" id="closeUsersModalBtn">&times;</button>
-<h3 style="margin-bottom:15px;">Управление пользователями системы</h3>
-<h4>Зарегистрировать нового сотрудника в системе:</h4>
+<h3 style="margin-bottom:15px;">Управление пользователями и сводный импорт</h3>
+<div style="background:var(--bg-color);padding:15px;border-radius:8px;margin-bottom:20px;display:flex;flex-direction:column;gap:12px;border:1px solid var(--border);">
+<div class="form-group" style="margin-bottom:0;width:100%;">
+<label style="font-size:0.85rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Выберите скачанный сводный файл (.csv):</label>
+<input type="file" id="mainCsvFileInput" accept=".csv" style="padding:8px;border:1px solid var(--border);border-radius:8px;width:100%;background:var(--card-bg);color:var(--text-main);">
+</div>
+<div style="display:flex;width:100%;">
+<button class="btn" id="syncMainCsvBtn" style="background:#2f855a;font-size:0.85rem;padding:8px 14px;height:38px;width:100%;">🔄 Обновить общие оценки из CSV</button>
+</div>
+</div>
+<h4 style="margin:15px 0 10px;font-size:0.95rem;color:var(--text-muted);">Зарегистрировать нового сотрудника:</h4>
 <div class="inline-form">
-<input type="text" id="regName" placeholder="ФИО (как в Гугл Таблице)">
+<input type="text" id="regName" placeholder="Фамилия Имя (строго как в CSV)">
 <input type="email" id="regEmail" placeholder="Email сотрудника">
 <input type="text" id="regTeam" placeholder="Название команды">
 <button class="btn" id="registerUserBtn">Создать аккаунт</button>
@@ -92,7 +101,7 @@ if(savedTheme==='dark')document.documentElement.setAttribute('data-theme','dark'
 <div style="overflow-x:auto;">
 <table class="user-management-table">
 <thead>
-<tr><th>ФИ Специалиста</th><th>Email</th><th>Команда</th><th>Новый пароль</th><th>Действия</th></tr>
+<tr><th>ФИО Специалиста</th><th>Email</th><th>Команда</th><th>Новый пароль</th><th>Действия</th></tr>
 </thead>
 <tbody id="userManagementRows"></tbody>
 </table>
