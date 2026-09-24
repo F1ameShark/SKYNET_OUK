@@ -1,18 +1,8 @@
 import { auth, db, app } from "./firebase-config.js";
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, getAuth } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 import { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+import { initializeApp, deleteApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import { startDashboard } from "./dashboard-logic.js";
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-
-
-
-import { auth, db, app } from "./firebase-config.js";
-import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
-import { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-import { startDashboard } from "./dashboard-logic.js";
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
 const ui = {
     authScreen: document.getElementById('authScreen'), mainScreen: document.getElementById('mainScreen'),
@@ -31,7 +21,7 @@ export async function getUserTeamsMap() {
 onAuthStateChanged(auth, async (u) => {
     if (u) {
         let d = await getDoc(doc(db, "users", u.uid));
-        if (!d.exists()) { alert("Ваш профиль отсутствует в базе данных."); await signOut(auth); return; }
+        if (!d.exists()) { alert("Профиль отсутствует."); await signOut(auth); return; }
         currentUserProfile = d.data(); currentUserProfile.uid = u.uid;
         ui.userDisplayName.innerText = currentUserProfile.name; ui.userRoleBadge.innerText = currentUserProfile.role === 'leader' ? 'Руководитель' : 'Сотрудник';
         ui.authScreen.classList.add('hidden'); ui.mainScreen.classList.remove('hidden');
@@ -49,8 +39,8 @@ if (loginBtn) loginBtn.addEventListener('click', async () => {
 });
 const logoutBtn = document.getElementById('logoutBtn');
 if (logoutBtn) logoutBtn.addEventListener('click', () => signOut(auth));
-import { deleteApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
-
+const toggleSettingsBtn = document.getElementById('toggleSettingsBtn');
+if (toggleSettingsBtn) toggleSettingsBtn.addEventListener('click', () => { ui.settingsPanel.classList.toggle('hidden'); });
 const regUserBtn = document.getElementById('registerUserBtn');
 if (regUserBtn) regUserBtn.addEventListener('click', async () => {
     const name = document.getElementById('regName').value.trim(); const email = document.getElementById('regEmail').value.trim().toLowerCase();
