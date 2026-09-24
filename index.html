@@ -41,16 +41,15 @@ if(savedTheme==='dark')document.documentElement.setAttribute('data-theme','dark'
 <div class="navbar">
 <div class="site-logo-container">
 <img src="web-app-manifest-192x192.png" alt="Logo" class="site-logo-img">
-<div class="site-logo-text">ORDA <span>П ПОРТАЛ</span></div>
+<div class="site-logo-text">ORDA <span>ПОРТАЛ</span></div>
 </div>
 <div class="nav-user">
 <strong id="userDisplayName">-</strong> 
 <span id="userRoleBadge" style="font-size:0.8rem;padding:2px 8px;background:var(--border);color:var(--text-main);border-radius:10px;">-</span>
 </div>
 <div class="nav-buttons">
-<!-- Две новые вкладки переключения списков для Руководителя -->
-<button class="btn hiddenTab font-weight-bold" id="viewMyTeamBtn" style="background:#2b6cb0;">📊 Моя команда</button>
-<button class="btn hiddenTab font-weight-bold" id="viewAllStaffBtn" style="background:#4a5568;">👥 Все сотрудники</button>
+<button class="btn hiddenTab font-weight-bold" id="viewMyTeamBtn" style="background:#2b6cb0;color:white;display:none;">📊 Моя команда</button>
+<button class="btn hiddenTab font-weight-bold" id="viewAllStaffBtn" style="background:#4a5568;color:white;display:none;">👥 Все сотрудники</button>
 <button class="btn hidden" id="openUsersModalBtn" style="background:#3182ce;">⚙️ Управление базами</button>
 <button class="btn btn-danger" id="logoutBtn">Выйти</button>
 </div>
@@ -132,7 +131,6 @@ if(savedTheme==='dark')document.documentElement.setAttribute('data-theme','dark'
 <thead>
 <tr>
 <th id="sortName" class="sortable" style="width:25%;">Специалист</th>
-<!-- Новая интерактивная колонка сортировки по Командам для Сводного листа -->
 <th id="sortTeam" class="sortable" style="width:15%;">Команда</th>
 <th id="sortOuk" class="sortable" style="width:30%;">Результаты ОУК (Месяц / Недели)</th>
 <th id="sortSa" class="sortable" style="width:30%;">Результаты SA (Месяц / Недели)</th>
