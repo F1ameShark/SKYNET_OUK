@@ -1,13 +1,12 @@
 import { db } from "./firebase-config.js";
-import { collection, getDocs } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
-import { getUserTeamsMap } from "./auth-logic.js";
+import { collection, getDocs } from "https://gstatic.com";
 
 let googleData = []; let filteredData = [];
-let globalUserTeamsMap = {}; let sortStates = { name: false, ouk: true, sa: true };
+let sortStates = { name: false, ouk: true, sa: true };
 
 export async function startDashboard(userProfile) {
+    // 1. Скачиваем всех сотрудников из Firestore за один безопасный проход
     await fetchEmployeesFromFirestore();
-    globalUserTeamsMap = await getUserTeamsMap();
     
     document.getElementById('loader').style.display = 'none';
     document.getElementById('listContainer').classList.remove('hidden');
@@ -18,8 +17,13 @@ export async function startDashboard(userProfile) {
         document.getElementById('controlsBar').classList.remove('hidden');
         
         const leaderTeam = (userProfile.teamName || '').toLowerCase().trim();
+        const teamInput = document.getElementById('newTeamName');
+        if (teamInput) teamInput.placeholder = userProfile.teamName || "Укажите вашу команду";
+
+        // Фильтруем массив: оставляем только сотрудников из команды лидера
         filteredData = googleData.filter(u => {
-            const employeeTeam = (globalUserTeamsMap[u.name.toLowerCase().trim()] || '').toLowerCase().trim();
+            const employeeTeam = (u.teamName || '').toLowerCase().trim();
+            if (!leaderTeam) return true; // Если у лидера нет команды, показываем всех
             return employeeTeam === leaderTeam;
         });
         
@@ -48,14 +52,16 @@ async function fetchEmployeesFromFirestore() {
                 
                 googleData.push({
                     id: d.id, name: data.name, role: data.role || 'Не указана',
+                    teamName: data.teamName || data.team || 'Без команды', // Защита от разных имён полей команд
                     oukWeeks, oukTotal: data.ouk_total ?? null,
                     saWeeks, saTotal: data.sa_total ?? null,
                     rawData: data.history_weeks || {}
                 });
             }
         });
-    } catch(e) { console.error(e); }
+    } catch(e) { console.error("Ошибка Firestore:", e); }
 }
+
 window.openDetailedWeekModal = function(user, weekNum) {
     const modal = document.getElementById('weekDetailsModal');
     document.getElementById('weekModalTitle').innerText = "Детализация за " + weekNum + " неделю";
@@ -99,6 +105,7 @@ window.openDetailedWeekModal = function(user, weekNum) {
 };
 
 function getOukClass(v) { return v === null ? 'bg-none' : (v >= 90 ? 'bg-good' : (v >= 85 ? 'bg-normal' : 'bg-bad')); }
+// Фикс #DIV/0!
 function getSaClass(v) { return (v === null || isNaN(v)) ? 'bg-none' : (v >= 85 ? 'bg-good' : (v >= 70 ? 'bg-normal' : 'bg-bad')); }
 function fmt(v) { return (v === null || isNaN(v)) ? '-' : v.toFixed(1); }
 
@@ -127,9 +134,7 @@ function renderList(data) {
     if (data.length === 0) { rows.innerHTML = "<tr><td colspan='4' style='text-align:center;padding:30px;'>Ничего не найдено</td></tr>"; return; }
     
     data.forEach(user => {
-        const currentTeam = globalUserTeamsMap[user.name.toLowerCase().trim()] || 'Без команды';
         const tr = document.createElement('tr');
-        
         let oukBoxes = "";
         user.oukWeeks.forEach((v, i) => { oukBoxes += "<div class='week-mini-box " + getOukClass(v) + "' style='cursor:pointer;' id='oukClick-" + user.id + "-" + (i+1) + "'>" + fmt(v) + "</div>"; });
         
@@ -137,9 +142,9 @@ function renderList(data) {
         user.saWeeks.forEach((v, i) => { saBoxes += "<div class='week-mini-box " + getSaClass(v) + "' style='cursor:pointer;' id='saClick-" + user.id + "-" + (i+1) + "'>" + fmt(v) + "</div>"; });
 
         tr.innerHTML = "<td><div class='emp-profile'><div class='emp-avatar'>" + user.name.slice(0,2).toUpperCase() + "</div><div><div class='emp-name'>" + user.name + "</div><div class='emp-role-tag'>" + user.role + "</div></div></div></td>" +
-            "<td><span class='emp-team-badge'>" + currentTeam + "</span></td>" +
+            "<td><span class='emp-team-badge'>" + user.teamName + "</span></td>" +
             "<td><div class='metric-cell-wrapper'><div class='total-score-badge " + getOukClass(user.oukTotal) + "'>" + fmt(user.oukTotal) + "%</div><div class='weeks-mini-row'>" + oukBoxes + "</div></div></td>" +
-            "<td><div class=" + "'metric-cell-wrapper'><div class='total-score-badge " + getSaClass(user.saTotal) + "'>" + fmt(user.saTotal) + "%</div><div class='weeks-mini-row'>" + saBoxes + "</div></div></td>";
+            "<td><div class='metric-cell-wrapper'><div class='total-score-badge " + getSaClass(user.saTotal) + "'>" + fmt(user.saTotal) + "%</div><div class='weeks-mini-row'>" + saBoxes + "</div></div></td>";
         
         rows.appendChild(tr);
         
