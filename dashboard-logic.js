@@ -54,12 +54,13 @@ async function fetchEmployeesFromFirestore() {
         allEmployees = [];
         snap.forEach(d => {
             const data = d.data();
-            if (data.role === 'employee') {
+            // ИСПРАВЛЕНО: Сотрудник — это любой пользователь, у которого роль НЕ равна leader
+            if (data.role !== 'leader') {
                 const oukWeeks = [data.ouk_w1, data.ouk_w2, data.ouk_w3, data.ouk_w4, data.ouk_w5].map(v => v ?? null);
                 const saWeeks = [data.sa_w1, data.sa_w2, data.sa_w3, data.sa_w4, data.sa_w5].map(v => v ?? null);
                 allEmployees.push({
                     id: d.id, name: data.name, role: data.role || 'Не указана',
-                    teamName: data.teamName || data.team || 'Без команды',
+                    teamName: data.teamName || 'Без команды',
                     oukWeeks, oukTotal: data.ouk_total ?? null,
                     saWeeks, saTotal: data.sa_total ?? null,
                     rawData: data.history_weeks || {}
@@ -113,7 +114,7 @@ window.openDetailedWeekModal = function(user, weekNum) {
 
     if (!hData || !hData.criteria) {
         const fbOuk = user.oukWeeks[weekNum - 1]; const fbSa = user.saWeeks[weekNum - 1];
-        tBody.innerHTML = "<tr><td colspan='6' style='text-align:center;padding:20px;color:var(--text-muted);'>Детализация звонков отсутствует. Оценка недели: ОУК " + fmt(fbOuk) + "% / SA " + fmt(fbSa) + "%</td></tr>";
+        tBody.innerHTML = "<tr><td colspan='6' style='text-align:center;padding:20px;color:var(--text-muted);'>Детализация звонков отсутствует. Оценка за неделю: ОУК " + fmt(fbOuk) + "% / SA " + fmt(fbSa) + "%</td></tr>";
         document.getElementById('weekModalSaValue').innerText = fmt(fbOuk) + "%";
         document.getElementById('weekModalSaValue').className = getOukClass(fbOuk);
         modal.classList.remove('hidden'); return;
@@ -169,14 +170,12 @@ function renderList(data) {
     if (data.length === 0) { rows.innerHTML = "<tr><td colspan='4' style='text-align:center;padding:30px;'>Ничего не найдено</td></tr>"; return; }
     
     data.forEach(user => {
-        const currentTeam = user.teamName || 'Без команды';
-        const tr = document.createElement('tr');
-        let oukBoxes = ""; let saBoxes = "";
+        const tr = document.createElement('tr'); let oukBoxes = ""; let saBoxes = "";
         user.oukWeeks.forEach((v, i) => { oukBoxes += "<div class='week-mini-box " + getOukClass(v) + "' style='cursor:pointer;' id='oukClick-" + user.id + "-" + (i+1) + "'>" + fmt(v) + "</div>"; });
         user.saWeeks.forEach((v, i) => { saBoxes += "<div class='week-mini-box " + getSaClass(v) + "' style='cursor:pointer;' id='saClick-" + user.id + "-" + (i+1) + "'>" + fmt(v) + "</div>"; });
 
         tr.innerHTML = "<td><div class='emp-profile'><div class='emp-avatar'>" + user.name.slice(0,2).toUpperCase() + "</div><div><div class='emp-name'>" + user.name + "</div><div class='emp-role-tag'>" + user.role + "</div></div></div></td>" +
-            "<td><span class='emp-team-badge'>" + currentTeam + "</span></td>" +
+            "<td><span class='emp-team-badge'>" + user.teamName + "</span></td>" +
             "<td><div class='metric-cell-wrapper'><div class='total-score-badge " + getOukClass(user.oukTotal) + "'>" + fmt(user.oukTotal) + "%</div><div class='weeks-mini-row'>" + oukBoxes + "</div></div></td>" +
             "<td><div class='metric-cell-wrapper'><div class='total-score-badge " + getSaClass(user.saTotal) + "'>" + fmt(user.saTotal) + "%</div><div class='weeks-mini-row'>" + saBoxes + "</div></div></td>";
         rows.appendChild(tr);
@@ -215,3 +214,5 @@ document.getElementById('searchInput').addEventListener('input', () => {
     const s = document.getElementById('searchInput').value.toLowerCase();
     renderList(filteredData.filter(u => u.name.toLowerCase().includes(s)));
 });
+
+
