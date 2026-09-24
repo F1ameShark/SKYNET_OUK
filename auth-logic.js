@@ -5,6 +5,15 @@ import { startDashboard } from "./dashboard-logic.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
 
+
+
+import { auth, db, app } from "./firebase-config.js";
+import { signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+import { doc, getDoc, setDoc, updateDoc, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+import { startDashboard } from "./dashboard-logic.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+
 const ui = {
     authScreen: document.getElementById('authScreen'), mainScreen: document.getElementById('mainScreen'),
     userDisplayName: document.getElementById('userDisplayName'), userRoleBadge: document.getElementById('userRoleBadge'),
@@ -31,17 +40,19 @@ onAuthStateChanged(auth, async (u) => {
     } else { ui.mainScreen.classList.add('hidden'); ui.authScreen.classList.remove('hidden'); ui.openUsersModalBtn.classList.add('hidden'); }
 });
 
-ui.openUsersModalBtn.addEventListener('click', () => { ui.usersModal.classList.remove('hidden'); loadUserManagementList(); });
-ui.closeUsersModalBtn.addEventListener('click', () => ui.usersModal.classList.add('hidden'));
+if (ui.openUsersModalBtn) ui.openUsersModalBtn.addEventListener('click', () => { ui.usersModal.classList.remove('hidden'); loadUserManagementList(); });
+if (ui.closeUsersModalBtn) ui.closeUsersModalBtn.addEventListener('click', () => ui.usersModal.classList.add('hidden'));
 
-document.getElementById('loginBtn').addEventListener('click', async () => {
+const loginBtn = document.getElementById('loginBtn');
+if (loginBtn) loginBtn.addEventListener('click', async () => {
     try { await signInWithEmailAndPassword(auth, document.getElementById('loginEmail').value, document.getElementById('loginPassword').value); } catch(e){ ui.authError.innerText="Неверный логин или пароль."; }
 });
-document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth));
-document.getElementById('toggleSettingsBtn').addEventListener('click', () => { ui.settingsPanel.classList.toggle('hidden'); });
+const logoutBtn = document.getElementById('logoutBtn');
+if (logoutBtn) logoutBtn.addEventListener('click', () => signOut(auth));
 import { deleteApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 
-document.getElementById('registerUserBtn').addEventListener('click', async () => {
+const regUserBtn = document.getElementById('registerUserBtn');
+if (regUserBtn) regUserBtn.addEventListener('click', async () => {
     const name = document.getElementById('regName').value.trim(); const email = document.getElementById('regEmail').value.trim().toLowerCase();
     const team = document.getElementById('regTeam').value.trim() || "Основная"; if(!name || !email) return;
     const secApp = initializeApp(app.options, "SecondaryContext"); const secAuth = getAuth(secApp);
@@ -53,7 +64,8 @@ document.getElementById('registerUserBtn').addEventListener('click', async () =>
     } catch(e) { ui.modalAdminMessage.innerText = "Ошибка."; } finally { await deleteApp(secApp); }
 });
 
-document.getElementById('syncMainCsvBtn').addEventListener('click', async () => {
+const syncCsvBtn = document.getElementById('syncMainCsvBtn');
+if (syncCsvBtn) syncCsvBtn.addEventListener('click', async () => {
     const fileInput = document.getElementById('mainCsvFileInput'); const files = fileInput ? fileInput.files : null;
     if (!files || files.length === 0) { alert("Выберите скачанный CSV-файл для импорта!"); return; }
     ui.modalAdminMessage.style.color = "var(--primary)"; ui.modalAdminMessage.innerText = "Синхронизация оценок с Firebase Firestore...";
