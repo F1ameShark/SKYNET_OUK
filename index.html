@@ -41,17 +41,31 @@ if(savedTheme==='dark')document.documentElement.setAttribute('data-theme','dark'
 <div class="navbar">
 <div class="site-logo-container">
 <img src="web-app-manifest-192x192.png" alt="Logo" class="site-logo-img">
-<div class="site-logo-text">ORDA <span>ПОРТАЛ</span></div>
+<div class="site-logo-text">ORDA</div>
 </div>
 <div class="nav-user">
 <strong id="userDisplayName">-</strong> 
 <span id="userRoleBadge" style="font-size:0.8rem;padding:2px 8px;background:var(--border);color:var(--text-main);border-radius:10px;">-</span>
 </div>
 <div class="nav-buttons">
+<!-- Кнопка темы интегрирована прямо в Navbar на самое видное место -->
+<button class="btn" id="themeToggleBtn" style="background:var(--primary);font-size:1.1rem;padding:8px 12px;line-height:1;">🌙</button>
 <button class="btn hiddenTab font-weight-bold" id="viewMyTeamBtn" style="background:#2b6cb0;color:white;display:none;">📊 Моя команда</button>
 <button class="btn hiddenTab font-weight-bold" id="viewAllStaffBtn" style="background:#4a5568;color:white;display:none;">👥 Все сотрудники</button>
 <button class="btn hidden" id="openUsersModalBtn" style="background:#3182ce;">⚙️ Управление базами</button>
 <button class="btn btn-danger" id="logoutBtn">Выйти</button>
+</div>
+</div>
+<div id="settingsPanel" class="modal-overlay hidden">
+<div class="modal-content" style="max-width:500px;">
+<button class="modal-close" id="closeSettingsModalBtn">&times;</button>
+<h3 style="margin-bottom:20px;color:var(--text-main);">⚙️ Настройки и безопасность</h3>
+<h4 style="margin-bottom:10px;font-size:0.95rem;color:var(--text-muted);">Сменить личный пароль:</h4>
+<div class="form-group" style="margin-bottom:12px;">
+<input type="password" id="newPassword" placeholder="Новый пароль (минимум 6 символов)">
+</div>
+<button class="btn" id="changePasswordBtn" style="width:100%;margin-bottom:10px;">Обновить пароль</button>
+<p id="settingsMessage" style="font-size:0.9rem;font-weight:600;text-align:center;"></p>
 </div>
 </div>
 <div id="leaderPanel" class="admin-panel hidden">
