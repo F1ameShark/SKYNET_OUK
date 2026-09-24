@@ -39,7 +39,7 @@ document.getElementById('loginBtn').addEventListener('click', async () => {
 });
 document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth));
 document.getElementById('toggleSettingsBtn').addEventListener('click', () => { ui.settingsPanel.classList.toggle('hidden'); });
-import { deleteApp } from "https://gstatic.com";
+import { deleteApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
 
 document.getElementById('registerUserBtn').addEventListener('click', async () => {
     const name = document.getElementById('regName').value.trim(); const email = document.getElementById('regEmail').value.trim().toLowerCase();
