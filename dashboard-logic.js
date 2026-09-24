@@ -2,6 +2,7 @@ import { db } from "./firebase-config.js";
 import { collection, getDocs, doc, updateDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
 import { getUserTeamsMap } from "./auth-logic.js";
 
+
 let allEmployees = []; 
 let filteredData = [];
 let currentMode = "my_team";
@@ -18,6 +19,7 @@ export async function startDashboard(userProfile) {
 
     const btnMyTeam = document.getElementById('viewMyTeamBtn');
     const btnAllStaff = document.getElementById('viewAllStaffBtn');
+    const mobTabsBlock = document.getElementById('mobileTabsContainer');
     const leaderPanel = document.getElementById('leaderPanel');
     const statsBar = document.getElementById('statsBar');
     const controlsBar = document.getElementById('controlsBar');
@@ -25,6 +27,7 @@ export async function startDashboard(userProfile) {
     if (userProfile.role === 'leader') {
         if(btnMyTeam) { btnMyTeam.style.display = 'inline-block'; btnMyTeam.classList.add('tab-active'); }
         if(btnAllStaff) btnAllStaff.style.display = 'inline-block';
+        if(mobTabsBlock) mobTabsBlock.style.display = 'flex'; // Показываем блок переключателей на мобилках
         if(leaderPanel) leaderPanel.classList.remove('hidden');
         if(statsBar) statsBar.classList.remove('hidden');
         if(controlsBar) controlsBar.classList.remove('hidden');
@@ -37,6 +40,7 @@ export async function startDashboard(userProfile) {
     } else {
         if(btnMyTeam) btnMyTeam.style.display = 'none';
         if(btnAllStaff) btnAllStaff.style.display = 'none';
+        if(mobTabsBlock) mobTabsBlock.style.display = 'none';
         if(leaderPanel) leaderPanel.classList.add('hidden');
         if(statsBar) statsBar.classList.add('hidden');
         if(controlsBar) controlsBar.classList.add('hidden');
@@ -54,7 +58,6 @@ async function fetchEmployeesFromFirestore() {
         allEmployees = [];
         snap.forEach(d => {
             const data = d.data();
-            // ИСПРАВЛЕНО: Сотрудник — это любой пользователь, у которого роль НЕ равна leader
             if (data.role !== 'leader') {
                 const oukWeeks = [data.ouk_w1, data.ouk_w2, data.ouk_w3, data.ouk_w4, data.ouk_w5].map(v => v ?? null);
                 const saWeeks = [data.sa_w1, data.sa_w2, data.sa_w3, data.sa_w4, data.sa_w5].map(v => v ?? null);
@@ -73,21 +76,34 @@ async function fetchEmployeesFromFirestore() {
 function setupTabListeners() {
     const btnMyTeam = document.getElementById('viewMyTeamBtn');
     const btnAllStaff = document.getElementById('viewAllStaffBtn');
-    if(!btnMyTeam || !btnAllStaff || btnMyTeam.dataset.hooked) return;
+    const btnMyTeamMob = document.getElementById('viewMyTeamBtnMob');
+    const btnAllStaffMob = document.getElementById('viewAllStaffBtnMob');
+    
+    if(!btnMyTeam || btnMyTeam.dataset.hooked) return;
 
-    btnMyTeam.addEventListener('click', () => {
+    const actionMyTeam = () => {
         currentMode = "my_team";
-        btnMyTeam.classList.add('tab-active');
-        btnAllStaff.classList.remove('tab-active');
+        if(btnMyTeam) btnMyTeam.classList.add('tab-active');
+        if(btnMyTeamMob) btnMyTeamMob.classList.add('tab-active');
+        if(btnAllStaff) btnAllStaff.classList.remove('tab-active');
+        if(btnAllStaffMob) btnAllStaffMob.classList.remove('tab-active');
         applyActiveFilter();
-    });
+    };
 
-    btnAllStaff.addEventListener('click', () => {
+    const actionAllStaff = () => {
         currentMode = "all_staff";
-        btnAllStaff.classList.add('tab-active');
-        btnMyTeam.classList.remove('tab-active');
+        if(btnAllStaff) btnAllStaff.classList.add('tab-active');
+        if(btnAllStaffMob) btnAllStaffMob.classList.add('tab-active');
+        if(btnMyTeam) btnMyTeam.classList.remove('tab-active');
+        if(btnMyTeamMob) btnMyTeamMob.classList.remove('tab-active');
         applyActiveFilter();
-    });
+    };
+
+    if(btnMyTeam) btnMyTeam.addEventListener('click', actionMyTeam);
+    if(btnMyTeamMob) btnMyTeamMob.addEventListener('click', actionMyTeam);
+    if(btnAllStaff) btnAllStaff.addEventListener('click', actionAllStaff);
+    if(btnAllStaffMob) btnAllStaffMob.addEventListener('click', actionAllStaff);
+    
     btnMyTeam.dataset.hooked = true;
 }
 
@@ -114,7 +130,7 @@ window.openDetailedWeekModal = function(user, weekNum) {
 
     if (!hData || !hData.criteria) {
         const fbOuk = user.oukWeeks[weekNum - 1]; const fbSa = user.saWeeks[weekNum - 1];
-        tBody.innerHTML = "<tr><td colspan='6' style='text-align:center;padding:20px;color:var(--text-muted);'>Детализация звонков отсутствует. Оценка за неделю: ОУК " + fmt(fbOuk) + "% / SA " + fmt(fbSa) + "%</td></tr>";
+        tBody.innerHTML = "<tr><td colspan='6' style='text-align:center;padding:20px;color:var(--text-muted);'>Детализация отсутствует. Оценка за неделю: ОУК " + fmt(fbOuk) + "% / SA " + fmt(fbSa) + "%</td></tr>";
         document.getElementById('weekModalSaValue').innerText = fmt(fbOuk) + "%";
         document.getElementById('weekModalSaValue').className = getOukClass(fbOuk);
         modal.classList.remove('hidden'); return;
@@ -214,5 +230,4 @@ document.getElementById('searchInput').addEventListener('input', () => {
     const s = document.getElementById('searchInput').value.toLowerCase();
     renderList(filteredData.filter(u => u.name.toLowerCase().includes(s)));
 });
-
 
