@@ -18,6 +18,19 @@
 .sm-input,.sm-select{padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:0.85rem;background:var(--input-bg);color:var(--text-main);outline:none;}
 .btn-sm{padding:6px 10px;font-size:0.8rem;border-radius:4px;margin-right:5px;}
 .tab-active{background:var(--primary)!important;color:white!important;}
+/* АДАПТИВНАЯ МОБИЛЬНАЯ СТРОКА ДЛЯ ВКЛАДОК */
+.tabs-row-mobile{display:flex;gap:8px;margin-top:12px;width:100%;}
+.tabs-row-mobile .btn{flex:1;text-align:center;padding:10px 5px;font-size:0.85rem;}
+@media(min-width:769px){.tabs-row-mobile{display:none!important;}}
+@media(max-width:768px){
+.navbar{flex-direction:column;align-items:stretch;gap:10px;padding:12px;}
+.nav-buttons{display:flex;flex-wrap:wrap;gap:6px;width:100%;justify-content:space-between;}
+.nav-buttons .btn{padding:8px 10px;font-size:0.8rem;flex-grow:1;text-align:center;}
+#themeToggleBtn,#logoutBtn{flex-grow:0!important;}
+.navbar .nav-buttons .hiddenTab{display:none!important;} /* Прячем вкладки из навибара на мобилках */
+.list-container{overflow-x:auto;-webkit-overflow-scrolling:touch;} /* Не даем таблице сминаться */
+.main-list-table{min-width:700px;}
+}
 </style>
 <script>
 const savedTheme=localStorage.getItem('site-theme');
@@ -41,68 +54,50 @@ if(savedTheme==='dark')document.documentElement.setAttribute('data-theme','dark'
 <div class="navbar">
 <div class="site-logo-container">
 <img src="web-app-manifest-192x192.png" alt="Logo" class="site-logo-img">
-<div class="site-logo-text">ORDA</div>
+<div class="site-logo-text">ORDA <span>П ПОРТАЛ</span></div>
 </div>
-<div class="nav-user">
-<strong id="userDisplayName">-</strong> 
-<span id="userRoleBadge" style="font-size:0.8rem;padding:2px 8px;background:var(--border);color:var(--text-main);border-radius:10px;">-</span>
-</div>
+<div class="nav-user"><strong id="userDisplayName">-</strong> <span id="userRoleBadge" style="font-size:0.8rem;padding:2px 8px;background:var(--border);color:var(--text-main);border-radius:10px;">-</span></div>
 <div class="nav-buttons">
-<!-- Кнопка темы интегрирована прямо в Navbar на самое видное место -->
-<button class="btn" id="themeToggleBtn" style="background:var(--primary);font-size:1.1rem;padding:8px 12px;line-height:1;">🌙</button>
+<button class="btn" id="themeToggleBtn" style="background:var(--primary);font-size:1rem;padding:8px 12px;">🌙</button>
+<!-- Вкладки для ПК версии -->
 <button class="btn hiddenTab font-weight-bold" id="viewMyTeamBtn" style="background:#2b6cb0;color:white;display:none;">📊 Моя команда</button>
 <button class="btn hiddenTab font-weight-bold" id="viewAllStaffBtn" style="background:#4a5568;color:white;display:none;">👥 Все сотрудники</button>
-<button class="btn hidden" id="openUsersModalBtn" style="background:#3182ce;">⚙️ Управление базами</button>
+<button class="btn hidden" id="openUsersModalBtn" style="background:#3182ce;">⚙️ Управление</button>
 <button class="btn btn-danger" id="logoutBtn">Выйти</button>
 </div>
+</div>
+<!-- ОТДЕЛЬНАЯ МОБИЛЬНАЯ СТРОКА ДЛЯ ПЕРЕКЛЮЧЕНИЯ ВКЛАДОК (ПОЯВИТСЯ ТОЛЬКО НА СМАРТФОНАХ) -->
+<div class="tabs-row-mobile" id="mobileTabsContainer" style="display:none;">
+<button class="btn font-weight-bold tab-active" id="viewMyTeamBtnMob" style="background:#2b6cb0;color:white;">📊 Моя команда</button>
+<button class="btn font-weight-bold" id="viewAllStaffBtnMob" style="background:#4a5568;color:white;">👥 Все сотрудники</button>
 </div>
 <div id="settingsPanel" class="modal-overlay hidden">
 <div class="modal-content" style="max-width:500px;">
 <button class="modal-close" id="closeSettingsModalBtn">&times;</button>
 <h3 style="margin-bottom:20px;color:var(--text-main);">⚙️ Настройки и безопасность</h3>
 <h4 style="margin-bottom:10px;font-size:0.95rem;color:var(--text-muted);">Сменить личный пароль:</h4>
-<div class="form-group" style="margin-bottom:12px;">
-<input type="password" id="newPassword" placeholder="Новый пароль (минимум 6 символов)">
-</div>
+<div class="form-group" style="margin-bottom:12px;"><input type="password" id="newPassword" placeholder="Новый пароль (минимум 6 символов)"></div>
 <button class="btn" id="changePasswordBtn" style="width:100%;margin-bottom:10px;">Обновить пароль</button>
 <p id="settingsMessage" style="font-size:0.9rem;font-weight:600;text-align:center;"></p>
 </div>
 </div>
 <div id="leaderPanel" class="admin-panel hidden">
 <h3>Управление названием команды</h3>
-<div class="inline-form">
-<input type="text" id="newTeamName" placeholder="Новое название вашей команды">
-<button class="btn" id="saveTeamNameBtn">Сохранить</button>
-</div>
+<div class="inline-form"><input type="text" id="newTeamName" placeholder="Новое название вашей команды"><button class="btn" id="saveTeamNameBtn">Сохранить</button></div>
 </div>
 <div id="usersModal" class="modal-overlay hidden">
 <div class="modal-content">
 <button class="modal-close" id="closeUsersModalBtn">&times;</button>
 <h3 style="margin-bottom:15px;">Загрузка отчетов и регистрация</h3>
 <div style="background:var(--bg-color);padding:15px;border-radius:8px;margin-bottom:20px;display:flex;flex-direction:column;gap:12px;border:1px solid var(--border);">
-<div class="form-group" style="margin-bottom:0;width:100%;">
-<label style="font-size:0.85rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Выберите скачанный сводный CSV-файл:</label>
-<input type="file" id="mainCsvFileInput" accept=".csv" style="padding:8px;border:1px solid var(--border);border-radius:8px;width:100%;background:var(--card-bg);color:var(--text-main);">
-</div>
+<div class="form-group" style="margin-bottom:0;width:100%;"><label style="font-size:0.85rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Выберите скачанный сводный CSV-файл:</label><input type="file" id="mainCsvFileInput" accept=".csv" style="padding:8px;border:1px solid var(--border);border-radius:8px;width:100%;background:var(--card-bg);color:var(--text-main);"></div>
 <button class="btn" id="syncMainCsvBtn" style="background:#2f855a;font-size:0.85rem;padding:8px 14px;width:100%;">🔄 Обновить общие оценки сотрудников</button>
 </div>
 <h4 style="margin:15px 0 10px;font-size:0.95rem;color:var(--text-muted);">Зарегистрировать сотрудника:</h4>
-<div class="inline-form">
-<input type="text" id="regName" placeholder="Фамилия Имя">
-<input type="email" id="regEmail" placeholder="Email">
-<input type="text" id="regTeam" placeholder="Команда">
-<button class="btn" id="registerUserBtn">Создать аккаунт</button>
-</div>
+<div class="inline-form"><input type="text" id="regName" placeholder="Фамилия Имя"><input type="email" id="regEmail" placeholder="Email"><input type="text" id="regTeam" placeholder="Команда"><button class="btn" id="registerUserBtn">Создать аккаунт</button></div>
 <p id="modalAdminMessage" style="font-size:0.9rem;font-weight:600;margin-bottom:20px;"></p>
 <h4 style="margin-bottom:10px;font-size:1rem;">Учетные записи системы</h4>
-<div style="overflow-x:auto;">
-<table class="user-management-table">
-<thead>
-<tr><th>ФИО Специалиста</th><th>Email</th><th>Команда</th><th>Новый пароль</th><th>Действия</th></tr>
-</thead>
-<tbody id="userManagementRows"></tbody>
-</table>
-</div>
+<div style="overflow-x:auto;"><table class="user-management-table"><thead><tr><th>ФИО Специалиста</th><th>Email</th><th>Команда</th><th>Новый пароль</th><th>Действия</th></tr></thead><tbody id="userManagementRows"></tbody></table></div>
 </div>
 </div>
 <div id="weekDetailsModal" class="modal-overlay hidden">
@@ -110,51 +105,36 @@ if(savedTheme==='dark')document.documentElement.setAttribute('data-theme','dark'
 <button class="modal-close" id="closeWeekModalBtn">&times;</button>
 <h3 id="weekModalTitle" style="color:var(--text-main);margin-bottom:5px;">-</h3>
 <p id="weekModalEmpName" style="color:var(--text-muted);font-size:0.95rem;font-weight:600;margin-bottom:15px;"></p>
-<div style="overflow-x:auto;">
-<table class="detail-calls-table">
-<thead>
-<tr><th style="width:50%;">Критерии чек-листа оценки качества</th><th style="text-align:center;">Разговор 1</th><th style="text-align:center;">Разговор 2</th><th style="text-align:center;">Разговор 3</th><th style="text-align:center;">Разговор 4</th><th style="text-align:center;">Разговор 5</th></tr>
-</thead>
-<tbody id="weekModalTableRows"></tbody>
-</table>
-</div>
-<div style="margin-top:20px;padding:15px;background:var(--input-bg);border-radius:8px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);">
-<div>⚡ <strong>Оценка за эту неделю:</strong></div>
-<div id="weekModalSaValue" style="font-size:1.3rem;font-weight:800;padding:5px 12px;border-radius:6px;">-</div>
-</div>
+<div style="overflow-x:auto;"><table class="detail-calls-table"><thead><tr><th style="width:50%;">Критерии чек-листа оценки качества</th><th style="text-align:center;">Разговор 1</th><th style="text-align:center;">Разговор 2</th><th style="text-align:center;">Разговор 3</th><th style="text-align:center;">Разговор 4</th><th style="text-align:center;">Разговор 5</th></tr></thead><tbody id="weekModalTableRows"></tbody></table></div>
+<div style="margin-top:20px;padding:15px;background:var(--input-bg);border-radius:8px;display:flex;justify-content:space-between;align-items:center;border:1px solid var(--border);"><div>⚡ <strong>Оценка за эту неделю:</strong></div><div id="weekModalSaValue" style="font-size:1.3rem;font-weight:800;padding:5px 12px;border-radius:6px;">-</div></div>
 <button class="btn" id="closeWeekModalActionBtn" style="width:100%;margin-top:15px;background:#4a5568;">Закрыть окно просмотра</button>
 </div>
 </div>
-<div id="statsBar" class="stats-bar hidden">
-<div class="stat-card" style="border-left-color:#3182ce;"><p>Сотрудников в подчинении</p><h3 id="statTotal">-</h3></div>
-<div class="stat-card" style="border-left-color:var(--success);"><p>Средний ОУК команды</p><h3 id="statAvg">-</h3></div>
-<div class="stat-card" style="border-left-color:#805ad5;"><p>Средний SA команды</p><h3 id="statSaAvg">-</h3></div>
-</div>
-<div id="controlsBar" class="controls hidden"><input type="text" id="searchInput" class="search-input" placeholder="Поиск сотрудника по ФИО..."></div>
-<div id="mobileSortBlock" class="mobile-sort-container">
-<span class="sort-label">Сортировка:</span>
-<div class="mobile-sort-buttons">
-<button class="btn btn-sm" id="mbSortName">📝 По ФИО</button>
-<button class="btn btn-sm" id="mbSortOuk">📊 По ОУК</button>
-<button class="btn btn-sm" id="mbSortSa">⚡ По SA</button>
-</div>
-</div>
+<div id="statsBar" class="stats-bar hidden"><div class="stat-card" style="border-left-color:#3182ce;"><p>Сотрудников в подчинении</p><h3 id="statTotal">-</h3></div><div class="stat-card" style="border-left-color:var(--success);"><p>Средний ОУК команды</p><h3 id="statAvg">-</h3></div><div class="stat-card" style="border-left-color:#805ad5;"><p>Средний SA команды</p><h3 id="statSaAvg">-</h3></div></div>
+<div class="controls hidden" id="controlsBar"><input type="text" id="searchInput" class="search-input" placeholder="Поиск сотрудника по ФИО..."></div>
+<div id="mobileSortBlock" class="mobile-sort-container"><span class="sort-label">Сортировка:</span><div class="mobile-sort-buttons"><button class="btn btn-sm" id="mbSortName">📝 По ФИО</button><button class="btn btn-sm" id="mbSortOuk">📊 По ОУК</button><button class="btn btn-sm" id="mbSortSa">⚡ По SA</button></div></div>
 <div id="loader" class="loader">Считывание базы данных Firestore...</div>
-<div id="listContainer" class="list-container hidden">
-<table class="main-list-table">
-<thead>
-<tr>
-<th id="sortName" class="sortable" style="width:25%;">Специалист</th>
-<th id="sortTeam" class="sortable" style="width:15%;">Команда</th>
-<th id="sortOuk" class="sortable" style="width:30%;">Результаты ОУК (Месяц / Недели)</th>
-<th id="sortSa" class="sortable" style="width:30%;">Результаты SA (Месяц / Недели)</th>
-</tr>
-</thead>
-<tbody id="mainListRows"></tbody>
-</table>
+<div id="listContainer" class="list-container hidden"><table class="main-list-table"><thead><tr><th id="sortName" class="sortable" style="width:25%;">Специалист</th><th id="sortTeam" class="sortable" style="width:15%;">Команда</th><th id="sortOuk" class="sortable" style="width:30%;">Результаты ОУК (Месяц / Недели)</th><th id="sortSa" class="sortable" style="width:30%;">Результаты SA (Месяц / Недели)</th></tr></thead><tbody id="mainListRows"></tbody></table></div>
 </div>
 </div>
-</div>
-<script type="module" src="script.js?v=9999"></script>
+<script type="module" src="script.js?v=20000"></script>
+<script type="module">
+const tBtn=document.getElementById('themeToggleBtn');
+if(tBtn) {
+tBtn.addEventListener('click',()=>{
+if(document.documentElement.getAttribute('data-theme')==='dark'){
+document.documentElement.removeAttribute('data-theme');localStorage.setItem('site-theme','light');tBtn.innerText='🌙';
+}else{
+document.documentElement.setAttribute('data-theme','dark');localStorage.setItem('site-theme','dark');tBtn.innerText='☀️';
+}
+});
+if(localStorage.getItem('site-theme')==='dark')tBtn.innerText='☀️';
+}
+document.addEventListener('click',(e)=>{
+if(e.target.id==='mbSortName') { const el = document.getElementById('sortName'); if(el) el.click(); }
+if(e.target.id==='mbSortOuk') { const el = document.getElementById('sortOuk'); if(el) el.click(); }
+if(e.target.id==='mbSortSa') { const el = document.getElementById('sortSa'); if(el) el.click(); }
+});
+</script>
 </body>
 </html>
