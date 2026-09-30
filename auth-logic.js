@@ -68,34 +68,43 @@ if (syncCsvBtn) syncCsvBtn.addEventListener('click', async () => {
                 const fName = row[0].trim().toLowerCase().replace(/\s+/g, ' ');
                 if (!fName || fName.includes('общая') || fName.startsWith('http')) continue;
                 
-                // Исправлены индексы под структуру твоего файла:
-                // ОУК недели 1-5 это индексы 2-6. Общий ОУК — индекс 7.
-                // SA недели 1-5 это индексы 8-12. Общий SA — индекс 13.
                 csvDataMap[fName] = {
                     oukWeeks: [row[2], row[3], row[4], row[5], row[6]].map(v => parseNumLocal(v)), oukTotal: parseNumLocal(row[7]),
                     saWeeks: [row[8], row[9], row[10], row[11], row[12]].map(v => parseNumLocal(v)), saTotal: parseNumLocal(row[13]),
                     role: row[1] ? row[1].trim() : 'Не указана'
                 };
             }
+            
+            // --- ОТЛАДКА №1: Посмотрим, что распарсилось из вашего "пустого" CSV ---
+            console.log("Результат парсинга CSV (карта данных):", csvDataMap);
+
             const snap = await getDocs(collection(db, "users")); let successCount = 0;
             for (const d of snap.docs) {
-                const uData = d.data(); if (uData.role !== 'employee') continue;
+                const uData = d.data(); if (uData.role === 'leader') continue;
                 const empKey = uData.name.trim().toLowerCase().replace(/\s+/g, ' '); const csvUser = csvDataMap[empKey];
                 const userRef = doc(db, "users", d.id); const updateFields = {};
+                
                 if (csvUser) {
                     updateFields['role'] = csvUser.role; updateFields['ouk_total'] = csvUser.oukTotal; updateFields['sa_total'] = csvUser.saTotal;
                     for(let w=1; w<=5; w++) { updateFields[`ouk_w${w}`] = csvUser.oukWeeks[w-1]; updateFields[`sa_w${w}`] = csvUser.saWeeks[w-1]; }
                 } else {
+                    // Если сотрудника вообще нет в файле
                     updateFields['ouk_total'] = null; updateFields['sa_total'] = null;
                     for(let w=1; w<=5; w++) { updateFields[`ouk_w${w}`] = null; updateFields[`sa_w${w}`] = null; }
                 }
-                await updateDoc(userRef, updateFields); successCount++;
+                
+                // --- ОТЛАДКА №2: Что мы отправляем для конкретного сотрудника в Firestore ---
+                console.log(`Обновление для ${uData.name} (ID: ${d.id}):`, updateFields);
+
+                try {
+                    await updateDoc(userRef, updateFields); 
+                    successCount++;
+                } catch (dbErr) {
+                    console.error(`Ошибка записи в Firestore для ${uData.name}:`, dbErr);
+                }
             }
             ui.modalAdminMessage.style.color = "var(--success)"; ui.modalAdminMessage.innerText = `Успешно! Синхронизировано специалистов: ${successCount}`;
-            
-            // Сбрасываем инпут файла, чтобы при повторном выборе того же измененного файла всё срабатывало заново
             if (fileInput) fileInput.value = ""; 
-            
             startDashboard(currentUserProfile);
         } catch (err) { ui.modalAdminMessage.style.color = "var(--danger)"; ui.modalAdminMessage.innerText = "Ошибка структуры CSV."; console.error(err); }
     };
