@@ -53,7 +53,6 @@ if (regUserBtn) regUserBtn.addEventListener('click', async () => {
         document.getElementById('regName').value=""; document.getElementById('regEmail').value=""; loadUserManagementList(); startDashboard(currentUserProfile);
     } catch(e) { ui.modalAdminMessage.innerText = "Ошибка."; } finally { await deleteApp(secApp); }
 });
-
 const syncCsvBtn = document.getElementById('syncMainCsvBtn');
 if (syncCsvBtn) syncCsvBtn.addEventListener('click', async () => {
     const fileInput = document.getElementById('mainCsvFileInput'); const files = fileInput ? fileInput.files : null;
@@ -64,44 +63,32 @@ if (syncCsvBtn) syncCsvBtn.addEventListener('click', async () => {
         try {
             const text = e.target.result; const lines = text.split(/\r?\n/); const csvDataMap = {};
             for (let i = 2; i < lines.length; i++) {
-                if (!lines[i].trim()) continue; const row = parseCsvRow(lines[i]); if (row.length < 14) continue;
+                if (!lines[i].trim()) continue; const row = parseCsvRow(lines[i]); if (row.length < 17) continue;
                 const fName = row[0].trim().toLowerCase().replace(/\s+/g, ' ');
                 if (!fName || fName.includes('общая') || fName.startsWith('http')) continue;
                 
+                // Данные ОУК за месяц берутся из индекса 15 (столбец P), SA — из индекса 16 (столбец Q)
                 csvDataMap[fName] = {
-                    oukWeeks: [row[2], row[3], row[4], row[5], row[6]].map(v => parseNumLocal(v)), oukTotal: parseNumLocal(row[7]),
-                    saWeeks: [row[8], row[9], row[10], row[11], row[12]].map(v => parseNumLocal(v)), saTotal: parseNumLocal(row[13]),
+                    oukWeeks: [row[2], row[3], row[4], row[5], row[6]].map(v => parseNumLocal(v)), 
+                    oukTotal: parseNumLocal(row[15]), // Столбец P
+                    saWeeks: [row[8], row[9], row[10], row[11], row[12]].map(v => parseNumLocal(v)), 
+                    saTotal: parseNumLocal(row[16]), // Столбец Q
                     role: row[1] ? row[1].trim() : 'Не указана'
                 };
             }
-            
-            // --- ОТЛАДКА №1: Посмотрим, что распарсилось из вашего "пустого" CSV ---
-            console.log("Результат парсинга CSV (карта данных):", csvDataMap);
-
             const snap = await getDocs(collection(db, "users")); let successCount = 0;
             for (const d of snap.docs) {
                 const uData = d.data(); if (uData.role === 'leader') continue;
                 const empKey = uData.name.trim().toLowerCase().replace(/\s+/g, ' '); const csvUser = csvDataMap[empKey];
                 const userRef = doc(db, "users", d.id); const updateFields = {};
-                
                 if (csvUser) {
                     updateFields['role'] = csvUser.role; updateFields['ouk_total'] = csvUser.oukTotal; updateFields['sa_total'] = csvUser.saTotal;
                     for(let w=1; w<=5; w++) { updateFields[`ouk_w${w}`] = csvUser.oukWeeks[w-1]; updateFields[`sa_w${w}`] = csvUser.saWeeks[w-1]; }
                 } else {
-                    // Если сотрудника вообще нет в файле
                     updateFields['ouk_total'] = null; updateFields['sa_total'] = null;
                     for(let w=1; w<=5; w++) { updateFields[`ouk_w${w}`] = null; updateFields[`sa_w${w}`] = null; }
                 }
-                
-                // --- ОТЛАДКА №2: Что мы отправляем для конкретного сотрудника в Firestore ---
-                console.log(`Обновление для ${uData.name} (ID: ${d.id}):`, updateFields);
-
-                try {
-                    await updateDoc(userRef, updateFields); 
-                    successCount++;
-                } catch (dbErr) {
-                    console.error(`Ошибка записи в Firestore для ${uData.name}:`, dbErr);
-                }
+                await updateDoc(userRef, updateFields); successCount++;
             }
             ui.modalAdminMessage.style.color = "var(--success)"; ui.modalAdminMessage.innerText = `Успешно! Синхронизировано специалистов: ${successCount}`;
             if (fileInput) fileInput.value = ""; 
@@ -115,7 +102,6 @@ function parseCsvRow(t) {
     let r = ['']; let q = false; for (let i = 0; i < t.length; i++) { if (t[i] === '"') { q = !q; continue; } if (t[i] === ',' && !q) { r.push(''); continue; } r[r.length - 1] += t[i]; } return r;
 }
 
-// Исправлена валидация чисел, чтобы не отбрасывать нулевые или измененные значения
 function parseNumLocal(v) { 
     if (v === undefined || v === null) return null; 
     v = v.toString().trim().replace('%', ''); 
@@ -131,10 +117,41 @@ async function loadUserManagementList() {
         snap.forEach((d) => {
             const uData = d.data(); const uId = d.id; if (uData.role === 'leader') return;
             const tr = document.createElement('tr');
-            tr.innerHTML = `<td>${uData.name}</td><td>${uData.role}</td><td>${uData.teamName}</td>`;
+            
+            tr.innerHTML = `
+                <td>${uData.name}</td>
+                <td>${uData.teamName || 'Без команды'}</td>
+                <td>${uData.email}</td>
+                <td style="text-align: right;">
+                    <button class="action-btn pass-btn" id="resetPass-${uId}" style="margin-right: 5px; padding: 4px 8px; font-size: 12px; cursor: pointer;">Сбросить пароль</button>
+                    <button class="action-btn del-btn" id="deleteUser-${uId}" style="padding: 4px 8px; font-size: 12px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer;">Удалить</button>
+                </td>
+            `;
             ui.userManagementRows.appendChild(tr);
+
+            document.getElementById(`resetPass-${uId}`).addEventListener('click', async () => {
+                if(!confirm(`Сбросить пароль для ${uData.name} на "123456"?`)) return;
+                const secApp = initializeApp(app.options, "ResetContext"); const secAuth = getAuth(secApp);
+                try {
+                    await signInWithEmailAndPassword(secAuth, uData.email, "123456"); 
+                    alert("У пользователя уже установлен стандартный пароль 123456 либо сброс не требуется.");
+                } catch(err) {
+                    alert("Для смены измененного пароля сотрудника используйте стандартную форму отправки ссылки сброса или пересоздайте учетную запись.");
+                } finally { await deleteApp(secApp); }
+            });
+
+            document.getElementById(`deleteUser-${uId}`).addEventListener('click', async () => {
+                if (!confirm(`Вы уверены, что хотите удалить сотрудника ${uData.name}? Из базы данных удалятся все его оценки.`)) return;
+                try {
+                    await deleteDoc(doc(db, "users", uId));
+                    ui.modalAdminMessage.style.color = "var(--success)";
+                    ui.modalAdminMessage.innerText = "Сотрудник успешно удален из базы данных.";
+                    loadUserManagementList();
+                    startDashboard(currentUserProfile);
+                } catch(e) {
+                    alert("Ошибка при удалении из БД.");
+                }
+            });
         });
-    } catch(e) {}
+    } catch(e) { console.error("Ошибка загрузки менеджера пользователей:", e); }
 }
-
-
